@@ -6,21 +6,23 @@ import gleam/json
 import gleam/list
 import gleam/option.{type Option}
 import gleam/result
+import mf2/diagnostic
 import simplifile
 
 import mf2.{type Engine, type Error as EngineError}
 import mf2/annotated_value.{type AnnotatedValue} as av
 
 import framework/tests_schema_ast.{
-  type Assertion, type DefaultTestProperties, type RawTest, type RawTestFile,
-  type Test, type TestFile as TestFile,
+  type Assertion, type DefaultTestProperties, type ExpError, type ExpPart,
+  type RawTest, type RawTestFile, type Test, type TestFile,
 } as test_ast
 import framework/tests_schema_parser as tsp
 
 pub type RunnerError {
   UnexpectedFailure(List(EngineError))
   UnexpectedSuccess(String)
-  ExactAssertionError(String, String)
+  ExactAssertionFailure(String, String)
+  ExpectedDiagnosticMissing(ExpError)
 }
 
 pub fn run_tests(filename: String) {
@@ -62,10 +64,17 @@ fn run_test(engine: Engine, test_: Test) -> Result(Nil, RunnerError) {
   test_.assertions
   |> list.try_each(fn(assertion) {
     case assertion {
-      test_ast.Exact(expected) -> result |> assert_response(expected)
-      test_ast.Parts(expected_parts) -> result |> assert_parts(expected_parts)
+      test_ast.Exact(expected) ->
+        result
+        |> assert_response(expected)
+
+      test_ast.Parts(expected_parts) ->
+        result
+        |> assert_parts(expected_parts)
+
       test_ast.Errors(expected_errors) ->
-        result |> assert_errors(expected_errors)
+        result
+        |> assert_errors(expected_errors)
     }
   })
 }
@@ -89,13 +98,13 @@ fn assert_response(
 
   case actual == expected {
     True -> Ok(Nil)
-    False -> Error(ExactAssertionError(actual, expected))
+    False -> Error(ExactAssertionFailure(actual, expected))
   }
 }
 
 fn assert_parts(
   _result: AnnotatedValue(String),
-  expected_parts: List(test_ast.ExpPart),
+  expected_parts: List(ExpPart),
 ) {
   let _ = echo "expected parts"
   let _ = echo expected_parts
@@ -103,12 +112,34 @@ fn assert_parts(
 }
 
 fn assert_errors(
-  _result: AnnotatedValue(String),
-  expected_errors: List(test_ast.ExpError),
+  result: AnnotatedValue(String),
+  expected_errors: List(ExpError),
 ) {
-  let _ = echo "expected errors"
-  let _ = echo expected_errors
-  Error(UnexpectedSuccess("Expecting errors - dont know how to test yet"))
+  let diagnostics = echo result.diagnostics
+
+  expected_errors
+  |> list.try_each(fn(error) {
+    let expected_diagnostic = case error {
+      test_ast.SyntaxError -> diagnostic.SyntaxError
+      test_ast.VariantKeyMismatch -> diagnostic.VariantKeyMismatch
+      test_ast.MissingFallbackVariantS -> diagnostic.MissingFallbackVariant
+      test_ast.MissingSelectorAnnotation -> diagnostic.MissingSelectorAnnotation
+      test_ast.DuplicateDeclaration -> diagnostic.DuplicateDeclaration
+      test_ast.DuplicateOptionName -> diagnostic.DuplicateOptionName
+      test_ast.DuplicateVariant -> diagnostic.DuplicateVariant
+      test_ast.UnresolvedVariable -> diagnostic.UnresolvedVariable
+      test_ast.UnknownFunction -> diagnostic.UnknownFunction
+      test_ast.BadSelector -> diagnostic.BadSelector
+      test_ast.BadOperand -> diagnostic.BadOperand
+      test_ast.BadOption -> diagnostic.BadOption
+      test_ast.BadVariantKey -> diagnostic.BadVariantKey
+    }
+
+    case diagnostics |> list.contains(expected_diagnostic) {
+      True -> Ok(Nil)
+      False -> Error(ExpectedDiagnosticMissing(error))
+    }
+  })
 }
 
 pub fn dynamic_to_string(dynamic: Dynamic) -> String {

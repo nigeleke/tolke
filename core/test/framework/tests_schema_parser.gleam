@@ -240,7 +240,7 @@ fn exp_part_decoder() -> decode.Decoder(ExpPart) {
     ])
   }
 
-  decode.field(decode.string, decode.string, fn(type_) {
+  decode.field("type", decode.string, fn(type_) {
     case dict.get(exp_part_registry, type_) {
       Ok(decoder_fn) -> decoder_fn(type_)
       Error(_) -> decode.failure(ast.TextPart(""), "unknown expPart: " <> type_)
@@ -262,17 +262,19 @@ fn bidi_isolation_value_decoder() -> Decoder(BidiIsolationValue) {
 }
 
 fn markup_kind_decoder() -> Decoder(MarkupKind) {
-  use value <- decode.field("value", decode.string)
-  case value {
-    "open" -> decode.success(ast.MarkupOpen)
-    "standalone" -> decode.success(ast.MarkupStandalone)
-    "close" -> decode.success(ast.MarkupClose)
-    _ -> decode.failure(ast.MarkupStandalone, "invalid markup-kind")
-  }
+  decode.string
+  |> decode.then(fn(value) {
+    case value {
+      "open" -> decode.success(ast.MarkupOpen)
+      "standalone" -> decode.success(ast.MarkupStandalone)
+      "close" -> decode.success(ast.MarkupClose)
+      _ -> decode.failure(ast.MarkupStandalone, "invalid markup-kind")
+    }
+  })
 }
 
 fn expression_sub_part_decoder() -> Decoder(ExpressionSubPart) {
-  use type_ <- decode.field("type", decode.string)
+  use type_ <- decode.field(decode.string, decode.string)
   decode.success(ast.ExpressionSubPart(type_))
 }
 
@@ -372,22 +374,22 @@ fn raw_test_decoder() -> Decoder(RawTest) {
 // ------------------------------------
 // Choose tracer
 // ------------------------------------
-// fn trace(decoder: Decoder(a), _name: String) -> Decoder(a) {
-//   decoder
-// }
-// ------------------------------------
-import gleam/io
-
-fn trace(decoder: decode.Decoder(a), name: String) -> decode.Decoder(a) {
-  io.println(">> " <> name)
+fn trace(decoder: Decoder(a), _name: String) -> Decoder(a) {
   decoder
-  |> decode.map(fn(value) {
-    io.println("<< " <> name)
-    value
-  })
-  |> decode.map_errors(fn(errors) {
-    io.println("<! " <> name)
-    errors
-  })
 }
+// ------------------------------------
+// import gleam/io
+
+// fn trace(decoder: decode.Decoder(a), name: String) -> decode.Decoder(a) {
+//   io.println(">> " <> name)
+//   decoder
+//   |> decode.map(fn(value) {
+//     io.println("<< " <> name)
+//     value
+//   })
+//   |> decode.map_errors(fn(errors) {
+//     io.println("<! " <> name)
+//     errors
+//   })
+// }
 // ------------------------------------
