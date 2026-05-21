@@ -2,32 +2,29 @@ import gleam/option.{type Option as GleamOption}
 
 /// message           = simple-message / complex-message
 pub type Message {
-  MessageSimple(SimpleMessage)
-  MessageComplex(ComplexMessage)
+  Simple(SimpleMessage)
+  Complex(ComplexMessage)
 }
 
 /// simple-message    = o [simple-start pattern]
 pub type SimpleMessage {
-  SimpleMessageBody(GleamOption(#(SimpleStart, Pattern)))
+  SimpleMessage(OptionalWhitespace, GleamOption(#(SimpleStart, Pattern)))
+}
+
+/// internal representation...
+pub type MessageElement {
+  Text(String)
+  Escaped(String)
+  Placeholder(Placeholder)
 }
 
 /// simple-start      = simple-start-char / escaped-char / placeholder
-pub type SimpleStart {
-  SimpleStartChar(SimpleStartChar)
-  SimpleStartEscapedChar(EscapedChar)
-  SimpleStartPlaceholder(Placeholder)
-}
+pub type SimpleStart =
+  MessageElement
 
 /// pattern           = *(text-char / escaped-char / placeholder)
-pub type Pattern {
-  PatternBody(List(PatternElement))
-}
-
-pub type PatternElement {
-  PatternElementTextChar(TextChar)
-  PatternElementEscapedChar(EscapedChar)
-  PatternElementPlaceholder(Placeholder)
-}
+pub type Pattern =
+  List(MessageElement)
 
 /// placeholder       = expression / markup
 pub type Placeholder {
@@ -37,7 +34,7 @@ pub type Placeholder {
 
 /// complex-message   = o *(declaration o) complex-body o
 pub type ComplexMessage {
-  ComplexMessageBody(List(Declaration), ComplexBody)
+  ComplexMessage(List(Declaration), ComplexBody)
 }
 
 /// declaration       = input-declaration / local-declaration
@@ -54,37 +51,37 @@ pub type ComplexBody {
 
 /// input-declaration = input o variable-expression
 pub type InputDeclaration {
-  InputDeclarationBody(VariableExpression)
+  InputDeclaration(VariableExpression)
 }
 
 /// local-declaration = local s variable o "=" o expression
 pub type LocalDeclaration {
-  LocalDeclarationBody(Variable, Expression)
+  LocalDeclaration(Variable, Expression)
 }
 
 /// quoted-pattern    = o "{{" pattern "}}"
 pub type QuotedPattern {
-  QuotedPatternBody(Pattern)
+  QuotedPattern(Pattern)
 }
 
 /// matcher           = match-statement s variant *(o variant)
 pub type Matcher {
-  MatcherBody(MatchStatement, Variant, List(Variant))
+  Matcher(MatchStatement, Variant, List(Variant))
 }
 
 /// match-statement   = match 1*(s selector)
 pub type MatchStatement {
-  MatchStatementBody(List(Selector))
+  MatchStatement(List(Selector))
 }
 
 /// selector          = variable
 pub type Selector {
-  SelectorBody(Variable)
+  Selector(Variable)
 }
 
 /// variant           = key *(s key) quoted-pattern
 pub type Variant {
-  VariantBody(Key, List(Key), QuotedPattern)
+  Variant(Key, List(Key), QuotedPattern)
 }
 
 /// key               = literal / "*"
@@ -105,17 +102,17 @@ pub type Expression {
 
 /// literal-expression  = "{" o literal [s function] *(s attribute) o "}"
 pub type LiteralExpression {
-  LiteralExpressionBody(Literal, GleamOption(Function), List(Attribute))
+  LiteralExpression(Literal, GleamOption(Function), List(Attribute))
 }
 
 /// variable-expression = "{" o variable [s function] *(s attribute) o "}"
 pub type VariableExpression {
-  VariableExpressionBody(Variable, GleamOption(Function), List(Attribute))
+  VariableExpression(Variable, GleamOption(Function), List(Attribute))
 }
 
 /// function-expression = "{" o function *(s attribute) o "}"
 pub type FunctionExpression {
-  FunctionExpressionBody(Function, List(Attribute))
+  FunctionExpression(Function, List(Attribute))
 }
 
 /// markup = "{" o "#" identifier *(s option) *(s attribute) o ["/"] "}"  ; open and standalone
@@ -129,12 +126,12 @@ pub type Markup {
 /// ; Expression and literal parts
 /// function       = ":" identifier *(s option)
 pub type Function {
-  FunctionBody(Identifier, List(Option))
+  Function(Identifier, List(Option))
 }
 
 /// option         = identifier o "=" o (literal / variable)
 pub type Option {
-  OptionBody(Identifier, OptionElement)
+  Option(Identifier, OptionElement)
 }
 
 pub type OptionElement {
@@ -144,12 +141,13 @@ pub type OptionElement {
 
 /// attribute      = "@" identifier [o "=" o literal]
 pub type Attribute {
-  AttributeBody(Identifier, GleamOption(Literal))
+  FlagAttribute(Identifier)
+  ValueAttribute(Identifier, Literal)
 }
 
 /// variable       = "$" name
 pub type Variable {
-  VariableBody(Name)
+  Variable(Name)
 }
 
 /// literal          = quoted-literal / unquoted-literal

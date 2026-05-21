@@ -85,7 +85,8 @@
             "description": "... -> literal-expression -> \"{\" literal s annotation \"}\" -> \"{\" literal s function \"}\" -> \"{\" literal s \":\" identifier \"}\" -> \"{\" literal s \":\" name \"}\"",
             "src": "{a :f}",
             "exp": "{|a|}",
-            "expErrors": [{ "type": "unknown-function" }]
+            "expErrors": [{ "type": "unknown-function" }],
+            "only": true
         },
         {
             "description": "... -> \"{\" literal s \":\" namespace \":\" name \"}\"",

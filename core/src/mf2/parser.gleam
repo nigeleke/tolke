@@ -16,7 +16,7 @@ import gleam/option.{type Option as GleamOption} as gleam_option
 import gleam/order
 import gleam/string
 
-import ast.{
+import mf2/parser/ast.{
   type Attribute, type Bidi, type ComplexBody, type ComplexMessage,
   type ContentChar, type Declaration, type EscapedChar, type Expression,
   type Function, type FunctionExpression, type Identifier, type Input,
@@ -33,21 +33,26 @@ import ast.{
 
 const digits0_9 = "0123456789"
 
-const digits1_9 = "1234567889"
+const digits1_9 = "123456789"
 
+/// `Parsed` contains a successfully parsed `a`, together with any remaining
+/// non-parsed input.
 type Parsed(a) {
   Parsed(value: a, rest: String)
 }
 
-/// The `Parser` is a function that takes an input (`in` - a String) and, if a match
-/// is found, returns a type `out` and the remaining (non-parsed) input.
+pub type ParseError =
+  Nil
+
+/// The `Parser` is a function that takes an input String and, if a match
+/// is found, returns the `Parsed(out)`.
 /// If no match is found then a Error(Nil) is returned.
 pub type Parser(out) =
-  fn(String) -> Result(Parsed(out), Nil)
+  fn(String) -> Result(Parsed(out), ParseError)
 
-pub fn parse(in: String) -> Result(List(Message), Nil) {
-  let messages = one_or_more(message())
-  case messages(in) {
+/// Parse into a single mf2 message body.
+pub fn parse(in: String) -> Result(Message, ParseError) {
+  case message()(in) {
     Ok(parsed) ->
       case string.is_empty(parsed.rest) {
         True -> Ok(parsed.value)
@@ -60,23 +65,25 @@ pub fn parse(in: String) -> Result(List(Message), Nil) {
 /// message           = simple-message / complex-message
 fn message() -> Parser(Message) {
   choice([
-    simple_message() |> map(ast.MessageSimple),
-    complex_message() |> map(ast.MessageComplex),
+    simple_message() |> map(ast.Simple),
+    complex_message() |> map(ast.Complex),
   ])
+  |> trace("message")
 }
 
 /// simple-message = o [simple-start pattern]
 fn simple_message() -> Parser(SimpleMessage) {
-  right(optional_whitespace(), optional(pair(simple_start(), pattern())))
-  |> map(ast.SimpleMessageBody)
+  pair(optional_whitespace(), optional(pair(simple_start(), pattern())))
+  |> map(fn(result) { ast.SimpleMessage(result.0, result.1) })
+  |> trace("simple-message")
 }
 
 /// simple-start      = simple-start-char / escaped-char / placeholder
 fn simple_start() -> Parser(SimpleStart) {
   choice([
-    simple_start_char() |> map(ast.SimpleStartChar),
-    escaped_char() |> map(ast.SimpleStartEscapedChar),
-    placeholder() |> map(ast.SimpleStartPlaceholder),
+    simple_start_char() |> map(ast.Text),
+    escaped_char() |> map(ast.Escaped),
+    placeholder() |> map(ast.Placeholder),
   ])
 }
 
@@ -84,12 +91,12 @@ fn simple_start() -> Parser(SimpleStart) {
 fn pattern() -> Parser(Pattern) {
   zero_or_more(
     choice([
-      text_char() |> map(ast.PatternElementTextChar),
-      escaped_char() |> map(ast.PatternElementEscapedChar),
-      placeholder() |> map(ast.PatternElementPlaceholder),
+      text_char() |> map(ast.Text),
+      escaped_char() |> map(ast.Escaped),
+      placeholder() |> map(ast.Placeholder),
     ]),
   )
-  |> map(ast.PatternBody)
+  |> trace("pattern")
 }
 
 /// placeholder       = expression / markup
@@ -98,6 +105,7 @@ fn placeholder() -> Parser(Placeholder) {
     expression() |> map(ast.PlaceholderExpression),
     markup() |> map(ast.PlaceholderMarkup),
   ])
+  |> trace("placeholder")
 }
 
 /// complex-message   = o *(declaration o) complex-body o
@@ -111,8 +119,9 @@ fn complex_message() -> Parser(ComplexMessage) {
   )
   |> map(fn(result) {
     let #(declarations, body) = result
-    ast.ComplexMessageBody(declarations, body)
+    ast.ComplexMessage(declarations, body)
   })
+  |> trace("complex-message")
 }
 
 /// declaration       = input-declaration / local-declaration
@@ -121,6 +130,7 @@ fn declaration() -> Parser(Declaration) {
     input_declaration() |> map(ast.DeclarationInput),
     local_declaration() |> map(ast.DeclarationLocal),
   ])
+  |> trace("declaration")
 }
 
 /// complex-body      = quoted-pattern / matcher
@@ -129,12 +139,14 @@ fn complex_body() -> Parser(ComplexBody) {
     quoted_pattern() |> map(ast.ComplexBodyQuotedPattern),
     matcher() |> map(ast.ComplexBodyMatcher),
   ])
+  |> trace("complex-body")
 }
 
 /// input-declaration = input o variable-expression
 fn input_declaration() -> Parser(InputDeclaration) {
   triple(input(), optional_whitespace(), variable_expression())
-  |> map(fn(result) { ast.InputDeclarationBody(result.2) })
+  |> map(fn(result) { ast.InputDeclaration(result.2) })
+  |> trace("input-declaration")
 }
 
 /// local-declaration = local s variable o "=" o expression
@@ -143,22 +155,23 @@ fn local_declaration() -> Parser(LocalDeclaration) {
     use local <- bind(local(), in)
     use s <- bind(required_whitespace(), local.rest)
     use variable <- bind(variable(), s.rest)
-    use o <- bind(optional_whitespace(), variable.rest)
-    use equal <- bind(exact("="), o.rest)
-    use o <- bind(optional_whitespace(), equal.rest)
-    use expression <- bind(expression(), o.rest)
+    use o0 <- bind(optional_whitespace(), variable.rest)
+    use equal <- bind(exact("="), o0.rest)
+    use o1 <- bind(optional_whitespace(), equal.rest)
+    use expression <- bind(expression(), o1.rest)
 
-    let body = ast.LocalDeclarationBody(variable.value, expression.value)
+    let body = ast.LocalDeclaration(variable.value, expression.value)
 
     Ok(Parsed(body, expression.rest))
   }
+  |> trace("local-declaration")
 }
 
 /// quoted-pattern    = o "{{" pattern "}}"
 fn quoted_pattern() -> Parser(QuotedPattern) {
-  optional_whitespace()
-  |> and_then(fn(_) { triple(exact("{{"), pattern(), exact("}}")) })
-  |> map(fn(result) { ast.QuotedPatternBody(result.1) })
+  right(optional_whitespace(), triple(exact("{{"), pattern(), exact("}}")))
+  |> map(fn(result) { ast.QuotedPattern(result.1) })
+  |> trace("quoted-pattern")
 }
 
 /// matcher           = match-statement s variant *(o variant)
@@ -172,22 +185,24 @@ fn matcher() -> Parser(Matcher) {
       variant0.rest,
     )
 
-    let body = ast.MatcherBody(statement.value, variant0.value, variants.value)
+    let body = ast.Matcher(statement.value, variant0.value, variants.value)
 
     Ok(Parsed(body, variants.rest))
   }
+  |> trace("matcher")
 }
 
 /// match-statement   = match 1*(s selector)
 fn match_statement() -> Parser(MatchStatement) {
   right(match(), one_or_more(right(required_whitespace(), selector())))
-  |> map(ast.MatchStatementBody)
+  |> map(ast.MatchStatement)
 }
 
 /// selector          = variable
 fn selector() -> Parser(Selector) {
   variable()
-  |> map(ast.SelectorBody)
+  |> map(ast.Selector)
+  |> trace("selector")
 }
 
 /// variant           = key *(s key) quoted-pattern
@@ -197,7 +212,8 @@ fn variant() -> Parser(Variant) {
     zero_or_more(right(required_whitespace(), key())),
     quoted_pattern(),
   )
-  |> map(fn(result) { ast.VariantBody(result.0, result.1, result.2) })
+  |> map(fn(result) { ast.Variant(result.0, result.1, result.2) })
+  |> trace("variant")
 }
 
 /// key               = literal / "*"
@@ -206,6 +222,7 @@ fn key() -> Parser(Key) {
     literal() |> map(ast.KeyLiteral),
     exact("*") |> map(fn(_) { ast.KeyOther }),
   ])
+  |> trace("key")
 }
 
 /// ; Expressions
@@ -218,14 +235,15 @@ fn expression() -> Parser(Expression) {
     variable_expression() |> map(ast.ExpressionVariable),
     function_expression() |> map(ast.ExpressionFunction),
   ])
+  |> trace("expression")
 }
 
 /// literal-expression  = "{" o literal [s function] *(s attribute) o "}"
 fn literal_expression() -> Parser(LiteralExpression) {
   fn(in: String) {
     use open_brace <- bind(exact("{"), in)
-    use o <- bind(optional_whitespace(), open_brace.rest)
-    use literal <- bind(literal(), o.rest)
+    use o0 <- bind(optional_whitespace(), open_brace.rest)
+    use literal <- bind(literal(), o0.rest)
     use function <- bind(
       optional(right(required_whitespace(), function())),
       literal.rest,
@@ -234,22 +252,23 @@ fn literal_expression() -> Parser(LiteralExpression) {
       zero_or_more(right(required_whitespace(), attribute())),
       function.rest,
     )
-    use o <- bind(optional_whitespace(), attributes.rest)
-    use close_brace <- bind(exact("}"), o.rest)
+    use o1 <- bind(optional_whitespace(), attributes.rest)
+    use close_brace <- bind(exact("}"), o1.rest)
 
     let body =
-      ast.LiteralExpressionBody(literal.value, function.value, attributes.value)
+      ast.LiteralExpression(literal.value, function.value, attributes.value)
 
     Ok(Parsed(body, close_brace.rest))
   }
+  |> trace("literal-expression")
 }
 
 /// variable-expression = "{" o variable [s function] *(s attribute) o "}"
 fn variable_expression() -> Parser(VariableExpression) {
   fn(in: String) {
     use open_brace <- bind(exact("{"), in)
-    use o <- bind(optional_whitespace(), open_brace.rest)
-    use variable <- bind(variable(), o.rest)
+    use o0 <- bind(optional_whitespace(), open_brace.rest)
+    use variable <- bind(variable(), o0.rest)
     use function <- bind(
       optional(right(required_whitespace(), function())),
       variable.rest,
@@ -258,70 +277,67 @@ fn variable_expression() -> Parser(VariableExpression) {
       zero_or_more(right(required_whitespace(), attribute())),
       function.rest,
     )
-    use o <- bind(optional_whitespace(), attributes.rest)
-    use close_brace <- bind(exact("}"), o.rest)
+    use o1 <- bind(optional_whitespace(), attributes.rest)
+    use close_brace <- bind(exact("}"), o1.rest)
 
     let body =
-      ast.VariableExpressionBody(
-        variable.value,
-        function.value,
-        attributes.value,
-      )
+      ast.VariableExpression(variable.value, function.value, attributes.value)
 
     Ok(Parsed(body, close_brace.rest))
   }
+  |> trace("variable-expression")
 }
 
 /// function-expression = "{" o function *(s attribute) o "}"
 fn function_expression() -> Parser(FunctionExpression) {
   fn(in: String) {
     use open_brace <- bind(exact("{"), in)
-    use o <- bind(optional_whitespace(), open_brace.rest)
-    use function <- bind(function(), o.rest)
+    use o0 <- bind(optional_whitespace(), open_brace.rest)
+    use function <- bind(function(), o0.rest)
     use attributes <- bind(
       zero_or_more(right(required_whitespace(), attribute())),
       function.rest,
     )
-    use o <- bind(optional_whitespace(), attributes.rest)
-    use close_brace <- bind(exact("}"), o.rest)
+    use o1 <- bind(optional_whitespace(), attributes.rest)
+    use close_brace <- bind(exact("}"), o1.rest)
 
-    let body = ast.FunctionExpressionBody(function.value, attributes.value)
+    let body = ast.FunctionExpression(function.value, attributes.value)
 
     Ok(Parsed(body, close_brace.rest))
   }
+  |> trace("function-expression")
 }
 
 /// markup = "{" o "#" identifier *(s option) *(s attribute) o ["/"] "}"  ; open and standalone
 ///        / "{" o "/" identifier *(s option) *(s attribute) o "}"  ; close
+/// Warning: Parser is order dependent & relies on longest parse wins.
 fn markup() -> Parser(Markup) {
   choice([
-    markup_standalone(),
-    markup_open(),
+    markup_open_or_standalone(),
     markup_close(),
   ])
+  |> trace("markup")
 }
 
-fn markup_standalone() -> Parser(Markup) {
-  markup_common(exact("#"), exact("/"), ast.MarkupStandalone)
-}
-
-fn markup_open() -> Parser(Markup) {
-  markup_common(exact("#"), succeed(""), ast.MarkupOpen)
+fn markup_open_or_standalone() -> Parser(Markup) {
+  markup_common(exact("#"), optional(exact("/")), ast.MarkupStandalone)
+  |> trace("markup-open-or-standalone")
 }
 
 fn markup_close() -> Parser(Markup) {
-  markup_common(exact("/"), succeed(""), ast.MarkupClose)
+  markup_common(exact("/"), succeed(gleam_option.None), ast.MarkupClose)
+  |> trace("markup-close")
 }
 
 fn markup_common(
   prefix: Parser(String),
-  suffix: Parser(String),
+  suffix: Parser(GleamOption(String)),
   build: fn(Identifier, List(Option), List(Attribute)) -> Markup,
 ) -> Parser(Markup) {
   fn(in: String) {
     use open_brace <- bind(exact("{"), in)
-    use o <- bind(optional_whitespace(), open_brace.rest)
-    use prefix <- bind(prefix, o.rest)
+    use o0 <- bind(optional_whitespace(), open_brace.rest)
+    use prefix <- bind(prefix, o0.rest)
     use identifier <- bind(identifier(), prefix.rest)
     use options <- bind(
       zero_or_more(right(required_whitespace(), option())),
@@ -331,8 +347,8 @@ fn markup_common(
       zero_or_more(right(required_whitespace(), attribute())),
       options.rest,
     )
-    use o <- bind(optional_whitespace(), attributes.rest)
-    use suffix <- bind(suffix, o.rest)
+    use o1 <- bind(optional_whitespace(), attributes.rest)
+    use suffix <- bind(suffix, o1.rest)
     use close_brace <- bind(exact("}"), suffix.rest)
 
     Ok(Parsed(
@@ -340,6 +356,7 @@ fn markup_common(
       close_brace.rest,
     ))
   }
+  |> trace("markup-common")
 }
 
 /// ; Expression and literal parts
@@ -350,42 +367,50 @@ fn function() -> Parser(Function) {
     identifier(),
     zero_or_more(right(required_whitespace(), option())),
   )
-  |> map(fn(result) { ast.FunctionBody(result.1, result.2) })
+  |> map(fn(result) { ast.Function(result.1, result.2) })
+  |> trace("function")
 }
 
 /// option         = identifier o "=" o (literal / variable)
 fn option() -> Parser(Option) {
   fn(in: String) {
     use identifier <- bind(identifier(), in)
-    use o <- bind(optional_whitespace(), identifier.rest)
-    use equal <- bind(exact("="), o.rest)
-    use o <- bind(optional_whitespace(), equal.rest)
+    use o0 <- bind(optional_whitespace(), identifier.rest)
+    use equal <- bind(exact("="), o0.rest)
+    use o1 <- bind(optional_whitespace(), equal.rest)
     use element <- bind(
       choice([
         literal() |> map(ast.OptionElementLiteral),
         variable() |> map(ast.OptionElementVariable),
       ]),
-      o.rest,
+      o1.rest,
     )
 
-    let body = ast.OptionBody(identifier.value, element.value)
+    let body = ast.Option(identifier.value, element.value)
 
     Ok(Parsed(body, element.rest))
   }
+  |> trace("option")
 }
 
 /// attribute      = "@" identifier [o "=" o literal]
 fn attribute() -> Parser(Attribute) {
-  triple(exact("@"), identifier(), optional(assign_literal()))
-  |> map(fn(result) { ast.AttributeBody(result.1, result.2) })
+  right(
+    exact("@"),
+    choice([
+      pair(identifier(), assign_literal())
+        |> map(fn(result) { ast.ValueAttribute(result.0, result.1) }),
+      identifier() |> map(ast.FlagAttribute),
+    ]),
+  )
 }
 
 fn assign_literal() -> Parser(Literal) {
   fn(in: String) {
-    use o <- bind(optional_whitespace(), in)
-    use equal <- bind(exact("="), o.rest)
-    use o <- bind(optional_whitespace(), equal.rest)
-    use literal <- bind(literal(), o.rest)
+    use o0 <- bind(optional_whitespace(), in)
+    use equal <- bind(exact("="), o0.rest)
+    use o1 <- bind(optional_whitespace(), equal.rest)
+    use literal <- bind(literal(), o1.rest)
 
     Ok(literal)
   }
@@ -394,7 +419,8 @@ fn assign_literal() -> Parser(Literal) {
 /// variable       = "$" name
 fn variable() -> Parser(Variable) {
   right(exact("$"), name())
-  |> map(ast.VariableBody)
+  |> map(ast.Variable)
+  |> trace("variable")
 }
 
 /// literal          = quoted-literal / unquoted-literal
@@ -403,6 +429,7 @@ fn literal() -> Parser(Literal) {
     quoted_literal() |> map(ast.LiteralQuoted),
     unquoted_literal() |> map(ast.LiteralUnquoted),
   ])
+  |> trace("literal")
 }
 
 /// quoted-literal   = "|" *(quoted-char / escaped-char) "|"
@@ -414,6 +441,7 @@ fn quoted_literal() -> Parser(QuotedLiteral) {
     exact("|"),
   )
   |> map(fn(result) { result.1 })
+  |> trace("quoted-literal")
 }
 
 /// unquoted-literal = name / number-literal
@@ -422,6 +450,7 @@ fn unquoted_literal() -> Parser(UnquotedLiteral) {
     name() |> map(ast.UnquotedLiteralName),
     number_literal() |> map(ast.UnquotedLiteralNumber),
   ])
+  |> trace("unquoted-literal")
 }
 
 /// ; number-literal matches JSON number (https://www.rfc-editor.org/rfc/rfc8259#section-6)
@@ -463,22 +492,26 @@ fn number_literal() -> Parser(NumberLiteral) {
       exponential.rest,
     ))
   }
+  |> trace("number-literal")
 }
 
 /// ; Keywords; Note that these are case-sensitive
 /// input = %s".input"
 fn input() -> Parser(Input) {
   exact(".input")
+  |> trace("input")
 }
 
 /// local = %s".local"
 fn local() -> Parser(Local) {
   exact(".local")
+  |> trace("local")
 }
 
 /// match = %s".match"
 fn match() -> Parser(Match) {
   exact(".match")
+  |> trace("match")
 }
 
 /// ; Names and identifiers
@@ -488,11 +521,13 @@ fn match() -> Parser(Match) {
 fn identifier() -> Parser(Identifier) {
   pair(optional(left(namespace(), exact(":"))), name())
   |> map(fn(result) { ast.Identifier(result.0, result.1) })
+  |> trace("identifier")
 }
 
 /// namespace  = name
 fn namespace() -> Parser(Namespace) {
   name()
+  |> trace("namespace")
 }
 
 /// name       = [bidi] name-start *name-char [bidi]
@@ -511,6 +546,7 @@ fn name() -> Parser(Name) {
 
     Ok(Parsed(name, bd2.rest))
   }
+  |> trace("name")
 }
 
 /// name-start = ALPHA / "_"
@@ -554,16 +590,19 @@ fn name_char() -> Parser(NameChar) {
 /// simple-start-char = content-char / "@" / "|"
 fn simple_start_char() -> Parser(SimpleStartChar) {
   choice([content_char(), grapheme_from("@|")])
+  |> trace("simple-start-char")
 }
 
 /// text-char         = content-char / ws / "." / "@" / "|"
 fn text_char() -> Parser(TextChar) {
   choice([content_char(), whitespace(), grapheme_from(".@|")])
+  |> trace("text-char")
 }
 
 /// quoted-char       = content-char / ws / "." / "@" / "{" / "}"
 fn quoted_char() -> Parser(QuotedChar) {
   choice([content_char(), whitespace(), grapheme_from(".@{}")])
+  |> trace("quoted-char")
 }
 
 /// content-char      = %x01-08        ; omit NULL (%x00), HTAB (%x09) and LF (%x0A)
@@ -589,13 +628,14 @@ fn content_char() -> Parser(ContentChar) {
     grapheme_in_range("\u{3001}", "\u{D7FF}"),
     grapheme_in_range("\u{E000}", "\u{10FFFF}"),
   ])
+  |> trace("content-char")
 }
 
 /// ; Character escapes
 /// escaped-char = backslash ( backslash / "{" / "|" / "}" )
 fn escaped_char() -> Parser(EscapedChar) {
-  pair(exact("\\"), grapheme_from("\\{|}"))
-  |> map(fn(escaped) { escaped.0 <> escaped.1 })
+  right(exact("\\"), grapheme_from("\\{|}"))
+  |> trace("escaped-char")
 }
 
 /// backslash    = %x5C ; U+005C REVERSE SOLIDUS "\"
@@ -613,6 +653,7 @@ fn required_whitespace() -> Parser(RequiredWhitespace) {
 
     Ok(Parsed(body, o.rest))
   }
+  |> trace("required-whitespace")
 }
 
 /// ; Optional whitespace
@@ -625,6 +666,7 @@ fn optional_whitespace() -> Parser(OptionalWhitespace) {
     ]),
   )
   |> map(joined)
+  |> trace("optional-whitespace")
 }
 
 /// ; Bidirectional marks and isolates
@@ -638,6 +680,7 @@ fn bidi() -> Parser(Bidi) {
 /// ws = SP / HTAB / CR / LF / %x3000
 fn whitespace() -> Parser(Whitespace) {
   grapheme_from(" \t\r\n\u{3000}")
+  |> trace("whitespace")
 }
 
 /// Helpers...
@@ -648,59 +691,43 @@ fn exact(value: String) -> Parser(String) {
       False -> Error(Nil)
     }
   }
+  |> trace("exact")
 }
 
-fn zero_or_more(parser: Parser(out)) -> Parser(List(out)) {
-  between(parser, 0, gleam_option.None)
+fn zero_or_more(parser: Parser(a)) -> Parser(List(a)) {
+  fn(in: String) { zero_or_more_impl(parser, in, []) }
 }
 
-fn one_or_more(parser: Parser(out)) -> Parser(List(out)) {
-  between(parser, 1, gleam_option.None)
-}
-
-fn between(
-  parser: Parser(out),
-  min: Int,
-  max: GleamOption(Int),
-) -> Parser(List(out)) {
-  fn(in: String) { between_loop(parser, min, max, in, [], 0) }
-}
-
-fn between_loop(
-  parser: Parser(out),
-  min: Int,
-  max: GleamOption(Int),
-  in: String,
-  acc,
-  count: Int,
-) {
-  case max {
-    gleam_option.Some(max_val) if count == max_val ->
-      Ok(Parsed(list.reverse(acc), in))
-
-    _ ->
-      case parser(in) {
-        Ok(parsed) ->
-          between_loop(
-            parser,
-            min,
-            max,
-            parsed.rest,
-            [parsed.value, ..acc],
-            count + 1,
-          )
-        Error(_) ->
-          case count >= min {
-            True -> Ok(Parsed(list.reverse(acc), in))
-            False -> Error(Nil)
-          }
+fn zero_or_more_impl(parser: Parser(a), in: String, acc: List(a)) {
+  case parser(in) {
+    Ok(Parsed(value, rest)) ->
+      case rest == in {
+        True -> Error(Nil)
+        False -> zero_or_more_impl(parser, rest, [value, ..acc])
       }
+    Error(_) -> Ok(Parsed(list.reverse(acc), in))
+  }
+}
+
+fn one_or_more(parser: Parser(a)) -> Parser(List(a)) {
+  fn(in: String) {
+    case parser(in) {
+      Ok(Parsed(value, rest)) ->
+        case rest == in {
+          True -> Error(Nil)
+          False ->
+            case zero_or_more(parser)(rest) {
+              Ok(Parsed(values, final_rest)) ->
+                Ok(Parsed([value, ..values], final_rest))
+              Error(err) -> Error(err)
+            }
+        }
+      Error(err) -> Error(err)
+    }
   }
 }
 
 fn choice(parsers: List(Parser(out))) -> Parser(out) {
-  assert !list.is_empty(parsers)
-
   fn(in: String) {
     case parsers {
       [] -> Error(Nil)
@@ -797,11 +824,11 @@ fn grapheme_in_range(from: String, to: String) -> Parser(String) {
   fn(in: String) {
     case string.pop_grapheme(in) {
       Ok(#(first, rest)) -> {
-        let gte_min = string.compare(from, first)
-        let lte_max = string.compare(first, to)
-        case gte_min, lte_max {
-          order.Gt, order.Lt
-          | order.Gt, order.Eq
+        let from_compare = string.compare(from, first)
+        let to_compare = string.compare(first, to)
+        case from_compare, to_compare {
+          order.Lt, order.Lt
+          | order.Lt, order.Eq
           | order.Eq, order.Lt
           | order.Eq, order.Eq
           -> Ok(Parsed(first, rest))
@@ -832,8 +859,8 @@ fn and_then(parser: Parser(in), next: fn(in) -> Parser(out)) -> Parser(out) {
 fn bind(
   parser: Parser(in),
   in: String,
-  next: fn(Parsed(in)) -> Result(out, Nil),
-) -> Result(out, Nil) {
+  next: fn(Parsed(in)) -> Result(out, ParseError),
+) -> Result(out, ParseError) {
   case parser(in) {
     Ok(parsed) -> next(parsed)
     Error(error) -> Error(error)
@@ -843,3 +870,33 @@ fn bind(
 fn succeed(value: a) -> Parser(a) {
   fn(in: String) { Ok(Parsed(value: value, rest: in)) }
 }
+
+// ------------------------------------
+// Choose tracer
+// ------------------------------------
+fn trace(parser: Parser(a), _name: String) -> Parser(a) {
+  parser
+}
+// ------------------------------------
+// import gleam/io
+
+// fn trace(parser: Parser(a), name: String) -> Parser(a) {
+//   fn(input) {
+//     io.println(">> " <> name)
+//     let result = parser(input)
+
+//     case result {
+//       Ok(value) -> {
+//         io.println("<< " <> name <> " ... ")
+//         io.println(" ... '" <> value.rest <> "'")
+//         Ok(value)
+//       }
+
+//       Error(error) -> {
+//         io.println("<! " <> name)
+//         Error(error)
+//       }
+//     }
+//   }
+// }
+// ------------------------------------
