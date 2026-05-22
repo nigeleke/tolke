@@ -23,6 +23,7 @@ pub type RunnerError {
   UnexpectedSuccess(String)
   ExactAssertionFailure(String, String)
   ExpectedDiagnosticMissing(ExpError)
+  ExpectedDiagnosticsMismatch(Int, Int)
 }
 
 pub fn run_tests(filename: String) {
@@ -64,19 +65,43 @@ fn run_test(engine: Engine, test_: Test) -> Result(Nil, RunnerError) {
   test_.assertions
   |> list.try_each(fn(assertion) {
     case assertion {
-      test_ast.Exact(expected) ->
-        result
-        |> assert_response(expected)
-
-      test_ast.Parts(expected_parts) ->
-        result
-        |> assert_parts(expected_parts)
-
-      test_ast.Errors(expected_errors) ->
-        result
-        |> assert_errors(expected_errors)
+      test_ast.Exact(expected) -> result |> assert_response(expected)
+      test_ast.Parts(expected) -> result |> assert_parts(expected)
+      test_ast.Errors(expected) -> result |> assert_errors(expected)
     }
   })
+  |> assert_expected_error_count(result, test_.assertions)
+}
+
+fn assert_expected_error_count(
+  assertion_result: Result(Nil, RunnerError),
+  test_result: AnnotatedValue(String),
+  assertions: List(Assertion),
+) -> Result(Nil, RunnerError) {
+  case assertion_result {
+    Ok(_) -> {
+      let expected_error_count =
+        assertions
+        |> list.fold(0, fn(acc, a) {
+          case a {
+            test_ast.Errors(errors) -> acc + list.length(errors)
+            _ -> acc
+          }
+        })
+
+      let actual_diagnostics_count = list.length(test_result.diagnostics)
+      case actual_diagnostics_count == expected_error_count {
+        True -> assertion_result
+        False ->
+          Error(ExpectedDiagnosticsMismatch(
+            actual_diagnostics_count,
+            expected_error_count,
+          ))
+      }
+    }
+
+    Error(_) -> assertion_result
+  }
 }
 
 fn get_params(test_: Test) -> dict.Dict(String, String) {
@@ -115,7 +140,9 @@ fn assert_errors(
   result: AnnotatedValue(String),
   expected_errors: List(ExpError),
 ) {
-  let diagnostics = echo result.diagnostics
+  let diagnostics = result.diagnostics
+
+  assert list.length(diagnostics) == list.length(expected_errors)
 
   expected_errors
   |> list.try_each(fn(error) {

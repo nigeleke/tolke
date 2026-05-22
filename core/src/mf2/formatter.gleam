@@ -6,9 +6,10 @@ import gleam/string
 
 import mf2/annotated_value.{type AnnotatedValue} as av
 import mf2/binder/model.{
-  type BoundDeclaration, type BoundElement, type BoundExpression,
-  type BoundFunction, type BoundMessage, type BoundOperand, type BoundValue,
-  type BoundValueRef, type BoundVariable,
+  type BoundAttribute, type BoundDeclaration, type BoundElement,
+  type BoundExpression, type BoundFunction, type BoundIdentifier,
+  type BoundMarkup, type BoundMessage, type BoundOperand, type BoundOption,
+  type BoundOptions, type BoundValue, type BoundValueRef, type BoundVariable,
 }
 import mf2/diagnostic
 import mf2/runtime.{type RuntimeContext}
@@ -42,7 +43,7 @@ fn format_elements(
   elements: List(BoundElement),
 ) -> List(AnnotatedValue(String)) {
   elements
-  |> list.map(fn(e) { format_element(context, e) })
+  |> list.map(format_element(context, _))
 }
 
 fn format_element(
@@ -52,7 +53,7 @@ fn format_element(
   case element {
     model.Text(s) -> av.annotate(s)
     model.Expression(e) -> context |> format_expression(e)
-    model.Markup(_) -> av.annotate("TODO format markup")
+    model.Markup(m) -> context |> format_markup(m)
     model.Fallback(s) -> av.annotate(s)
   }
 }
@@ -62,10 +63,15 @@ fn format_expression(
   expression: BoundExpression,
 ) -> AnnotatedValue(String) {
   case expression {
-    model.BoundExpression(_function, operand, _attributes) ->
-      case operand {
-        model.BoundValueRef(ref) -> context |> format_value_ref(ref)
-        model.NoOperand -> av.annotate("")
+    model.BoundExpression(function, operand, _attributes) ->
+      case function {
+        gleam_option.Some(function) ->
+          context
+          |> invoke_function(function, operand)
+
+        gleam_option.None ->
+          context
+          |> format_operand(operand)
       }
 
     model.BoundMatcher(_selectors, _variants) ->
@@ -73,13 +79,87 @@ fn format_expression(
   }
 }
 
-fn format_value_ref(
+fn format_markup(
   context: FormatContext,
-  operand: BoundValueRef,
+  markup: BoundMarkup,
 ) -> AnnotatedValue(String) {
-  case operand {
-    model.Literal(l) -> context |> format_value(l)
-    model.Variable(v) -> context |> format_variable(v)
+  case markup {
+    model.Standalone(name, options, attributes) ->
+      context
+      |> format_tag_parts("<", name, options, attributes, "/>")
+
+    model.Open(name, options, attributes) ->
+      context
+      |> format_tag_parts("<", name, options, attributes, ">")
+
+    model.Close(name, options, attributes) ->
+      context
+      |> format_tag_parts("/v", name, options, attributes, ">")
+  }
+}
+
+fn format_tag_parts(
+  context: FormatContext,
+  open: String,
+  name: BoundIdentifier,
+  options: BoundOptions,
+  attributes: List(BoundAttribute),
+  close: String,
+) -> AnnotatedValue(String) {
+  let tag = context |> format_identifier(name)
+  let opts = context |> format_options(options)
+  let attrs = context |> format_attributes(attributes)
+
+  av.map3(tag, opts, attrs, fn(tag, opts, attrs) {
+    open <> tag <> opts <> attrs <> close
+  })
+}
+
+fn format_options(
+  context: FormatContext,
+  options: BoundOptions,
+) -> AnnotatedValue(String) {
+  options
+  |> dict.to_list()
+  |> list.map(format_option(context, _))
+  |> av.transpose_list
+  |> av.map(string.join(_, " "))
+}
+
+fn format_option(
+  context: FormatContext,
+  option: #(BoundIdentifier, BoundOption),
+) -> AnnotatedValue(String) {
+  let #(key, value) = option
+
+  let key = context |> format_identifier(key)
+  let value = context |> format_value_ref(value)
+
+  av.map2(key, value, fn(key, value) { key <> " = " <> value })
+}
+
+fn format_attributes(
+  context: FormatContext,
+  attributes: List(BoundAttribute),
+) -> AnnotatedValue(String) {
+  attributes
+  |> list.map(format_attribute(context, _))
+  |> av.transpose_list
+  |> av.map(string.join(_, " "))
+}
+
+fn format_attribute(
+  context: FormatContext,
+  attribute: BoundAttribute,
+) -> AnnotatedValue(String) {
+  case attribute {
+    model.FlagAttribute(v) -> context |> format_identifier(v)
+    model.ValueAttribute(k, v) -> {
+      let k = context |> format_identifier(k)
+      let v = context |> format_value(v)
+
+      av.map2(k, v, fn(k, v) { k <> "=" <> v })
+    }
   }
 }
 
@@ -97,7 +177,18 @@ fn format_variable(
   context: FormatContext,
   variable: BoundVariable,
 ) -> AnnotatedValue(String) {
-  context |> lookup(variable)
+  let fallback = variable_fallback(variable)
+  context |> lookup(variable, fallback)
+}
+
+fn format_value_ref(
+  context: FormatContext,
+  value: BoundValueRef,
+) -> AnnotatedValue(String) {
+  case value {
+    model.Literal(l) -> context |> format_value(l)
+    model.Variable(v) -> context |> format_variable(v)
+  }
 }
 
 fn format_operand(
@@ -114,13 +205,21 @@ fn format_operand(
   }
 }
 
+fn format_identifier(
+  _context: FormatContext,
+  identifier: BoundIdentifier,
+) -> AnnotatedValue(String) {
+  let model.BoundIdentifier(name) = identifier
+  av.annotate(name)
+}
+
 // Helpers...
 fn lookup(
   context: FormatContext,
   variable: BoundVariable,
+  fallback: AnnotatedValue(String),
 ) -> AnnotatedValue(String) {
   let model.BoundVariable(name) = variable
-  let fallback = "{$" <> name <> "}"
 
   case context |> lookup_declaration(name) {
     Ok(expression) -> expression |> av.and_then(invoke_expression(context, _))
@@ -128,10 +227,7 @@ fn lookup(
     Error(_) ->
       case context |> lookup_inputs(name) {
         Ok(value) -> av.annotate(value)
-        Error(_) -> {
-          let diagnostics = [diagnostic.UnresolvedVariable]
-          av.annotate_with_diagnostics(fallback, diagnostics)
-        }
+        Error(_) -> fallback
       }
   }
 }
@@ -186,6 +282,9 @@ fn invoke_function(
   let model.BoundFunction(name, options) = function
   let model.BoundIdentifier(name) = name
 
+  let operand_fallback = operand_fallback(operand)
+  let function_fallback = function_fallback(function, operand)
+
   let function = context.runtime.functions |> dict.get(name)
 
   let operand = case operand {
@@ -194,7 +293,7 @@ fn invoke_function(
         model.Literal(l) -> av.annotate(gleam_option.Some(l))
         model.Variable(v) ->
           context
-          |> lookup(v)
+          |> lookup(v, operand_fallback)
           |> av.map(model.VString)
           |> av.map(gleam_option.Some)
       }
@@ -204,6 +303,54 @@ fn invoke_function(
 
   case function {
     Ok(function) -> operand |> av.and_then(function(_, options))
-    Error(_) -> av.annotate_with_diagnostics(name, [diagnostic.UnknownFunction])
+    Error(_) -> function_fallback
   }
+}
+
+fn operand_fallback(value: BoundOperand) -> AnnotatedValue(String) {
+  case value {
+    model.BoundValueRef(value) -> bound_value_ref_fallback(value)
+    model.NoOperand -> av.annotate("")
+  }
+}
+
+fn bound_value_ref_fallback(value: BoundValueRef) -> AnnotatedValue(String) {
+  case value {
+    model.Literal(l) -> literal_fallback(l)
+    model.Variable(v) -> variable_fallback(v)
+  }
+}
+
+fn variable_fallback(variable: BoundVariable) -> AnnotatedValue(String) {
+  let model.BoundVariable(name) = variable
+
+  let diagnostics = [diagnostic.UnresolvedVariable]
+  av.annotate_with_diagnostics("{$" <> name <> "}", diagnostics)
+}
+
+fn function_fallback(
+  function: BoundFunction,
+  operand: BoundOperand,
+) -> AnnotatedValue(String) {
+  let diagnostics = [diagnostic.UnknownFunction]
+  case operand {
+    model.BoundValueRef(value) ->
+      bound_value_ref_fallback(value)
+      |> av.map_with_diagnostics(fn(a) { a }, diagnostics)
+
+    model.NoOperand -> {
+      let model.BoundFunction(identifier, _) = function
+      let model.BoundIdentifier(name) = identifier
+      av.annotate_with_diagnostics("{:" <> name <> "}", diagnostics)
+    }
+  }
+}
+
+fn literal_fallback(value: BoundValue) -> AnnotatedValue(String) {
+  let value = case value {
+    model.VString(s) -> s
+    model.VNumber(n) -> float.to_string(n)
+  }
+
+  av.annotate("{|" <> value <> "|}")
 }

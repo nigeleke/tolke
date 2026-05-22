@@ -61,8 +61,7 @@ pub fn translate_string(
 ) -> AnnotatedValue(String) {
   case engine.parse(source) {
     Ok(message) -> translate_ast_message(engine, message, locale, variables)
-    Error(_error) ->
-      av.annotate_with_diagnostics("<parse-error>", [diagnostic.SyntaxError])
+    Error(_error) -> av.annotate_with_diagnostics("", [diagnostic.SyntaxError])
   }
 }
 

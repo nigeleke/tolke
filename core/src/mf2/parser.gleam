@@ -41,8 +41,10 @@ type Parsed(a) {
   Parsed(value: a, rest: String)
 }
 
-pub type ParseError =
-  Nil
+pub type ParseError {
+  UnconsumedInputError(String)
+  NoMatch
+}
 
 /// The `Parser` is a function that takes an input String and, if a match
 /// is found, returns the `Parsed(out)`.
@@ -56,7 +58,7 @@ pub fn parse(in: String) -> Result(Message, ParseError) {
     Ok(parsed) ->
       case string.is_empty(parsed.rest) {
         True -> Ok(parsed.value)
-        False -> Error(Nil)
+        False -> Error(NoMatch)
       }
     Error(error) -> Error(error)
   }
@@ -65,8 +67,8 @@ pub fn parse(in: String) -> Result(Message, ParseError) {
 /// message           = simple-message / complex-message
 fn message() -> Parser(Message) {
   choice([
-    simple_message() |> map(ast.Simple),
-    complex_message() |> map(ast.Complex),
+    simple_message() |> complete() |> map(ast.Simple),
+    complex_message() |> complete() |> map(ast.Complex),
   ])
   |> trace("message")
 }
@@ -688,7 +690,7 @@ fn exact(value: String) -> Parser(String) {
   fn(in: String) {
     case in |> string.starts_with(value) {
       True -> Ok(Parsed(value, in |> string.drop_start(string.length(value))))
-      False -> Error(Nil)
+      False -> Error(NoMatch)
     }
   }
   |> trace("exact")
@@ -702,7 +704,7 @@ fn zero_or_more_impl(parser: Parser(a), in: String, acc: List(a)) {
   case parser(in) {
     Ok(Parsed(value, rest)) ->
       case rest == in {
-        True -> Error(Nil)
+        True -> Error(NoMatch)
         False -> zero_or_more_impl(parser, rest, [value, ..acc])
       }
     Error(_) -> Ok(Parsed(list.reverse(acc), in))
@@ -714,7 +716,7 @@ fn one_or_more(parser: Parser(a)) -> Parser(List(a)) {
     case parser(in) {
       Ok(Parsed(value, rest)) ->
         case rest == in {
-          True -> Error(Nil)
+          True -> Error(NoMatch)
           False ->
             case zero_or_more(parser)(rest) {
               Ok(Parsed(values, final_rest)) ->
@@ -730,7 +732,7 @@ fn one_or_more(parser: Parser(a)) -> Parser(List(a)) {
 fn choice(parsers: List(Parser(out))) -> Parser(out) {
   fn(in: String) {
     case parsers {
-      [] -> Error(Nil)
+      [] -> Error(NoMatch)
 
       [p, ..rest] ->
         case p(in) {
@@ -813,9 +815,9 @@ fn grapheme_from(graphemes: String) -> Parser(String) {
       Ok(#(first, rest)) ->
         case graphemes |> string.contains(first) {
           True -> Ok(Parsed(first, rest))
-          False -> Error(Nil)
+          False -> Error(NoMatch)
         }
-      Error(_) -> Error(Nil)
+      Error(_) -> Error(NoMatch)
     }
   }
 }
@@ -832,10 +834,10 @@ fn grapheme_in_range(from: String, to: String) -> Parser(String) {
           | order.Eq, order.Lt
           | order.Eq, order.Eq
           -> Ok(Parsed(first, rest))
-          _, _ -> Error(Nil)
+          _, _ -> Error(NoMatch)
         }
       }
-      Error(_) -> Error(Nil)
+      Error(_) -> Error(NoMatch)
     }
   }
 }
@@ -868,7 +870,20 @@ fn bind(
 }
 
 fn succeed(value: a) -> Parser(a) {
-  fn(in: String) { Ok(Parsed(value: value, rest: in)) }
+  fn(in: String) { Ok(Parsed(value, in)) }
+}
+
+fn complete(parser: Parser(a)) -> Parser(a) {
+  fn(input: String) {
+    case parser(input) {
+      Ok(Parsed(value, rest)) ->
+        case string.is_empty(rest) {
+          True -> Ok(Parsed(value, ""))
+          False -> Error(UnconsumedInputError(rest))
+        }
+      Error(e) -> Error(e)
+    }
+  }
 }
 
 // ------------------------------------
