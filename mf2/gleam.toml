@@ -1,0 +1,11 @@
+name = "tolke_mf2"
+version = "0.0.0"
+description = "Gleam MessageFormat 2 implementation"
+
+[dependencies]
+gleam_stdlib = ">= 1.0.0 and < 2.0.0"
+tolke_mf2_parser = { path = "../mf2_parser" }
+
+[dev_dependencies]
+gleeunit = ">= 1.0.0 and < 2.0.0"
+tolke_dev_test = { path = "../dev_test" }
