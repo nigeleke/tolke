@@ -26,3 +26,8 @@ pub type EvaluatedAttribute {
   Flag(String)
   KeyValue(String, EvaluatedValue)
 }
+
+pub type EvaluatedSelector {
+  Valid(EvaluatedValue)
+  Invalid(EvaluatedValue)
+}

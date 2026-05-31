@@ -74,7 +74,7 @@ fn format_unresolved(value: UnresolvedValue) -> FormattedMessagePart {
     unresolved_value.UnresolvedVariable(name) -> "{$" <> name <> "}"
 
     unresolved_value.UnresolvedFunction(name, operand) ->
-      case echo operand {
+      case operand {
         option.None -> "{:" <> name <> "}"
 
         option.Some(unresolved_value.Variable(variable_name)) ->

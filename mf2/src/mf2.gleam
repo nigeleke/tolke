@@ -2,7 +2,7 @@ import ast.{type Message as ParsedMessage}
 import parser
 
 import context.{type Context}
-import diagnostic
+import issue
 import outcome.{type Outcome}
 
 import internal/bind
@@ -25,11 +25,8 @@ pub type MessagePart =
 
 pub fn parse(input: String) -> Outcome(Result(ParsedMessage, Error)) {
   case parser.parse(input) {
-    Ok(message) -> outcome.annotate(Ok(message))
-    Error(_) ->
-      outcome.annotate_with_diagnostics(Error(ParseError), [
-        diagnostic.SyntaxError,
-      ])
+    Ok(message) -> outcome.pure(Ok(message))
+    Error(_) -> outcome.pure_with_issue(Error(ParseError), issue.SyntaxError)
   }
 }
 
@@ -44,7 +41,7 @@ pub fn format_to_string_and_parts(
 
   message
   |> bind.bind(bind_context)
-  |> outcome.and_then(evaluate.evaluate(_, evaluate_context))
+  |> outcome.flat_map(evaluate.evaluate(_, evaluate_context))
   |> outcome.map(format.format(_, format_context))
 }
 

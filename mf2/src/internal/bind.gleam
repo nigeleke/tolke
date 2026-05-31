@@ -53,7 +53,7 @@ fn bind_simple_message(
 
 fn bind_element(element: MessageElement) -> Outcome(BoundElement) {
   case element {
-    ast.Text(s) | ast.Escaped(s) -> outcome.annotate(model.Text(s))
+    ast.Text(s) | ast.Escaped(s) -> outcome.pure(model.Text(s))
     ast.Placeholder(p) -> bind_placeholder(p)
   }
 }
@@ -84,7 +84,7 @@ fn bind_literal_expression(
 
   bind_literal(literal)
   |> outcome.map(model.Literal)
-  |> outcome.and_then(bind_operand_to_function(function, _, attributes))
+  |> outcome.flat_map(bind_operand_to_function(function, _, attributes))
 }
 
 fn bind_operand_to_function(
@@ -135,9 +135,9 @@ fn bind_function(function: Function) -> Outcome(BoundFunction) {
 
 fn bind_literal(literal: Literal) -> Outcome(BoundValue) {
   case literal {
-    ast.LiteralQuoted(s) -> outcome.annotate(model.VString(s))
+    ast.LiteralQuoted(s) -> outcome.pure(model.VString(s))
     ast.LiteralUnquoted(ast.UnquotedLiteral(s)) ->
-      outcome.annotate(model.VString(s))
+      outcome.pure(model.VString(s))
   }
 }
 
@@ -149,7 +149,7 @@ fn bind_identifier(id: Identifier) -> Outcome(BoundIdentifier) {
     gleam_option.None -> name
   }
 
-  outcome.annotate(model.BoundIdentifier(identifier))
+  outcome.pure(model.BoundIdentifier(identifier))
 }
 
 fn bind_options(options: List(Option)) -> Outcome(BoundOptions) {
@@ -175,7 +175,7 @@ fn bind_option(option: Option) -> Outcome(#(BoundIdentifier, BoundValueRef)) {
 
 fn bind_variable(variable: Variable) -> Outcome(BoundVariable) {
   let ast.Variable(name) = variable
-  outcome.annotate(model.BoundVariable(name))
+  outcome.pure(model.BoundVariable(name))
 }
 
 fn bind_attributes(
@@ -205,7 +205,7 @@ fn bind_variable_expression(
 
   bind_variable(variable)
   |> outcome.map(model.Variable)
-  |> outcome.and_then(bind_operand_to_function(function, _, attributes))
+  |> outcome.flat_map(bind_operand_to_function(function, _, attributes))
 }
 
 fn bind_function_expression(
@@ -281,7 +281,7 @@ fn bind_input_declaration(
 
   variable
   |> outcome.map(model.Variable)
-  |> outcome.and_then(bind_operand_to_function(function, _, attributes))
+  |> outcome.flat_map(bind_operand_to_function(function, _, attributes))
   |> outcome.map2(variable, fn(e, v) { model.BoundDeclaration(v, e) })
 }
 
@@ -303,10 +303,8 @@ fn bind_complex_body(body: ComplexBody) -> Outcome(BoundComplexBody) {
       |> outcome.map(model.Pattern)
 
     ast.ComplexBodyMatcher(matcher) ->
-      echo {
-        bind_matcher(matcher)
-        |> outcome.map(model.Matcher)
-      }
+      bind_matcher(matcher)
+      |> outcome.map(model.Matcher)
   }
 }
 
@@ -323,14 +321,14 @@ fn bind_matcher(matcher: Matcher) -> Outcome(BoundMatcher) {
   let ast.MatchStatement(selectors) = match_statement
 
   let selector =
-    echo selectors
-      |> list.map(bind_selector)
-      |> outcome.transpose_list
+    selectors
+    |> list.map(bind_selector)
+    |> outcome.transpose_list
 
   let variants =
-    echo [variant, ..variants]
-      |> list.map(bind_variant)
-      |> outcome.transpose_list
+    [variant, ..variants]
+    |> list.map(bind_variant)
+    |> outcome.transpose_list
 
   outcome.map2(selector, variants, fn(s, vs) { model.BoundMatcher(s, vs) })
 }
@@ -357,7 +355,7 @@ fn bind_variant(variant: Variant) -> Outcome(BoundVariant) {
 fn bind_key(key: Key) -> Outcome(BoundKey) {
   case key {
     ast.KeyLiteral(literal) -> bind_literal(literal) |> outcome.map(model.Key)
-    ast.KeyOther -> outcome.annotate(model.Wildcard)
+    ast.KeyOther -> outcome.pure(model.Wildcard)
   }
 }
 

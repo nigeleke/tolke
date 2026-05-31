@@ -1,0 +1,14 @@
+name = "tolke_dev_test"
+version = "0.0.0"
+description = """
+tolke development tooling.
+provides test framework and data.
+"""
+
+[dependencies]
+gleam_json = ">= 3.1.0 and < 4.0.0"
+gleam_stdlib = ">= 1.0.0 and < 2.0.0"
+simplifile = ">= 2.4.0 and < 3.0.0"
+
+[dev_dependencies]
+gleeunit = ">= 1.0.0 and < 2.0.0"

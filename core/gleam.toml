@@ -1,21 +1,20 @@
 name = "tolke"
-version = "1.0.0"
+version = "0.0.0"
 
-# Fill out these fields if you intend to generate HTML documentation or publish
-# your project to the Hex package manager.
-#
-# description = ""
-# licences = ["Apache-2.0"]
-# repository = { type = "github", user = "", repo = "" }
+description = """
+tolke turns MessageFormat 2 files into type-safe Gleam code.
+It compiles messages into convenient functions, validates consistency across
+locales, and supports both runtime and compile-time locale bundles.
+"""
+
+licences = ["BSD-3-Clause"]
+repository = { type = "github", user = "nigeleke", repo = "tolke" }
 # links = [{ title = "Website", href = "" }]
-#
-# For a full reference of all the available options, you can have a look at
-# https://gleam.run/writing-gleam/gleam-toml/.
+
+internal_modules = ["tolke/internal"]
 
 [dependencies]
 gleam_stdlib = ">= 1.0.0 and < 2.0.0"
 
 [dev_dependencies]
 gleeunit = ">= 1.0.0 and < 2.0.0"
-gleam_json = ">= 3.1.0 and < 4.0.0"
-simplifile = ">= 2.4.0 and < 3.0.0"
