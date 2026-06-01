@@ -2,6 +2,7 @@ import gleam/dict
 import gleam/dynamic.{type Dynamic}
 import gleam/dynamic/decode
 import gleam/list
+import gleam/option
 
 import framework/runner
 import framework/tests_schema_ast.{type ExpError, type ExpPart, type Test} as test_ast
@@ -52,6 +53,7 @@ fn create_context(test_: Test) -> Context {
 fn dynamic_to_value(dynamic: Dynamic) -> Value {
   let decoder = case dynamic |> dynamic.classify {
     "String" -> decode.string |> decode.map(value.String)
+    "Float" -> decode.float |> decode.map(value.Float)
     other -> {
       let expected = "need to decode: " <> other
       decode.failure(value.String(expected), expected)
@@ -80,9 +82,18 @@ fn assert_parts(
   let expected_parts =
     expected_parts
     |> list.map(fn(part) {
-      case part {
+      case echo part {
         test_ast.MarkupPart(test_ast.MarkupOpen, name, _, _) ->
           fm.MarkupOpen(name)
+        test_ast.MarkupPart(test_ast.MarkupClose, name, _, _) ->
+          fm.MarkupClose(name)
+        test_ast.ExpressionPart(
+          test_ast.StringExpression,
+          _,
+          _,
+          _,
+          option.Some(value),
+        ) -> fm.Text(dynamic_to_value(value) |> value.to_string)
         _ -> todo
       }
     })

@@ -1,8 +1,7 @@
+import gleam/float
 import gleam/list
 import gleam/option
 import gleam/string
-
-import value
 
 import internal/evaluate/model.{
   type EvaluatedAttribute, type EvaluatedElement, type EvaluatedMarkup,
@@ -38,7 +37,6 @@ fn parts_to_string(
   |> list.filter_map(fn(part) {
     case part {
       model.Text(s) -> Ok(s)
-      model.Value(v) -> Ok(value.to_string(v))
       model.MarkupOpen(_) -> Error(Nil)
       model.MarkupClose(_) -> Error(Nil)
     }
@@ -64,7 +62,7 @@ fn format_element(element: EvaluatedElement) -> List(FormattedMessagePart) {
 fn format_value(value: EvaluatedValue) -> FormattedMessagePart {
   case value {
     em.VString(s) -> model.Text(s)
-    em.VNumber(n) -> model.Value(value.Float(n))
+    em.VNumber(n) -> model.Text(float.to_string(n))
     em.Unresolved(u) -> format_unresolved(u)
   }
 }
@@ -91,13 +89,11 @@ fn format_markup(markup: EvaluatedMarkup) -> List(FormattedMessagePart) {
   case markup {
     em.Standalone(name, attrs) -> [
       [model.MarkupOpen(name)],
-      format_attributes(attrs),
       [model.MarkupClose(name)],
     ]
 
     em.Open(name, attrs) -> [
       [model.MarkupOpen(name)],
-      format_attributes(attrs),
     ]
 
     em.Close(name) -> [

@@ -340,8 +340,7 @@
         {
             "description": "message -> simple-message -> simple-start pattern -> placeholder -> markup -> \"{\" \"#\" identifier attribute \"}\" -> \"{\" \"#\" identifier identifier \"=\" literal \"}\"",
             "src": "{#a @c}",
-            "exp": "",
-            "only": true
+            "exp": ""
         },
         {
             "description": "message -> simple-message -> simple-start pattern -> placeholder -> markup -> \"{\" \"#\" identifier s \"}\" -> \"{\" \"#\" identifier identifier \"=\" literal \"}\"",
