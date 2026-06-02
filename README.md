@@ -7,6 +7,8 @@
 
 __Under development__
 
+During development the [g18n](https://g18n.hexdocs.pm/) and [localize](https://localize.hexdocs.pm/readme.html) packages were discovered - which potentially make the work here redundant. Watch this space.
+
 ## Background
 
 This program reads internationalisation files written in ICU MessageFormat 2.0 and processes them as structured input. It parses the message definitions and checks them for consistency and correctness, including issues such as missing variables, mismatched parameters, and invalid or inconsistent formatting patterns.
