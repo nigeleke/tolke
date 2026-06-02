@@ -84,9 +84,11 @@ fn assert_parts(
     |> list.map(fn(part) {
       case echo part {
         test_ast.MarkupPart(test_ast.MarkupOpen, name, _, _) ->
-          fm.MarkupOpen(name)
+          fm.MarkupOpen(name, [])
+
         test_ast.MarkupPart(test_ast.MarkupClose, name, _, _) ->
           fm.MarkupClose(name)
+
         test_ast.ExpressionPart(
           test_ast.StringExpression,
           _,

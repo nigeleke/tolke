@@ -8,7 +8,9 @@ import internal/evaluate/model.{
   type EvaluatedMessage, type EvaluatedValue,
 } as em
 import internal/format/context.{type Context}
-import internal/format/model.{type FormattedMessage, type FormattedMessagePart}
+import internal/format/model.{
+  type FormattedAttribute, type FormattedMessage, type FormattedMessagePart,
+}
 import internal/unresolved_value.{type UnresolvedValue}
 
 pub fn format(message: EvaluatedMessage, context: Context) -> FormattedMessage {
@@ -37,7 +39,7 @@ fn parts_to_string(
   |> list.filter_map(fn(part) {
     case part {
       model.Text(s) -> Ok(s)
-      model.MarkupOpen(_) -> Error(Nil)
+      model.MarkupOpen(_, _) -> Error(Nil)
       model.MarkupClose(_) -> Error(Nil)
     }
   })
@@ -88,12 +90,12 @@ fn format_unresolved(value: UnresolvedValue) -> FormattedMessagePart {
 fn format_markup(markup: EvaluatedMarkup) -> List(FormattedMessagePart) {
   case markup {
     em.Standalone(name, attrs) -> [
-      [model.MarkupOpen(name)],
+      [model.MarkupOpen(name, format_attributes(attrs))],
       [model.MarkupClose(name)],
     ]
 
     em.Open(name, attrs) -> [
-      [model.MarkupOpen(name)],
+      [model.MarkupOpen(name, format_attributes(attrs))],
     ]
 
     em.Close(name) -> [
@@ -105,21 +107,14 @@ fn format_markup(markup: EvaluatedMarkup) -> List(FormattedMessagePart) {
 
 fn format_attributes(
   attrs: List(EvaluatedAttribute),
-) -> List(FormattedMessagePart) {
+) -> List(FormattedAttribute) {
   attrs
-  |> list.flat_map(format_attribute)
+  |> list.map(format_attribute)
 }
 
-fn format_attribute(
-  attribute: EvaluatedAttribute,
-) -> List(FormattedMessagePart) {
+fn format_attribute(attribute: EvaluatedAttribute) -> FormattedAttribute {
   case attribute {
-    em.Flag(name) -> [model.Text(" " <> name)]
-
-    em.KeyValue(name, value) -> [
-      model.Text(" " <> name <> "=\""),
-      format_value(value),
-      model.Text("\""),
-    ]
+    em.Flag(name) -> model.Flag(name)
+    em.KeyValue(name, value) -> model.KeyValue(name, format_value(value))
   }
 }

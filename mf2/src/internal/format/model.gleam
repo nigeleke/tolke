@@ -4,6 +4,11 @@ pub type FormattedMessage {
 
 pub type FormattedMessagePart {
   Text(String)
-  MarkupOpen(String)
+  MarkupOpen(String, List(FormattedAttribute))
   MarkupClose(String)
+}
+
+pub type FormattedAttribute {
+  Flag(String)
+  KeyValue(String, FormattedMessagePart)
 }
