@@ -131,7 +131,7 @@ fn merge_declarations(
 ) -> Context {
   declarations
   |> list.fold(context, fn(acc, declaration) {
-    let evaluation = echo evaluate_declaration(declaration, context)
+    let evaluation = evaluate_declaration(declaration, acc)
     let #(key, value) = evaluation.value
     acc |> context.insert(key, value)
   })
@@ -152,7 +152,7 @@ fn evaluate_expression(
   expression: BoundExpression,
   context: Context,
 ) -> Outcome(EvaluatedValue) {
-  echo case echo expression {
+  case expression {
     bm.ApplyFunction(function) -> evaluate_apply_function(function, context)
     bm.IdentityFunction(function) ->
       evaluate_identity_function(function, context)
@@ -224,7 +224,7 @@ fn evaluate_function(
   let bm.BoundFunction(identifier, _options) = function
   let bm.BoundIdentifier(name) = identifier
 
-  let evaluated_operand = echo evaluate_operand(operand, context)
+  let evaluated_operand = evaluate_operand(operand, context)
 
   evaluated_operand
   |> outcome.flat_map(fn(evaluated) {
@@ -287,7 +287,7 @@ fn evaluate_complex_body(
       |> list.map(fn(e) { evaluate_element(e, context) })
       |> outcome.transpose_list
 
-    bm.Matcher(matcher) -> echo evaluate_matcher(matcher, context)
+    bm.Matcher(matcher) -> evaluate_matcher(matcher, context)
   }
 }
 
@@ -295,16 +295,14 @@ fn evaluate_matcher(
   matcher: BoundMatcher,
   context: Context,
 ) -> Outcome(List(EvaluatedElement)) {
-  let bm.BoundMatcher(selectors, variants) = echo matcher
+  let bm.BoundMatcher(selectors, variants) = matcher
 
   let outcome.Ok(selectors, _) =
     selectors
     |> list.map(evaluate_variable(_, context))
     |> outcome.transpose_list
 
-  let #(valid, invalid) = echo partition_selectors(selectors)
-
-  echo variants
+  let #(valid, invalid) = partition_selectors(selectors)
 
   case list.is_empty(invalid) {
     True -> {
@@ -314,10 +312,7 @@ fn evaluate_matcher(
     }
 
     False ->
-      echo outcome.pure_with_issues(
-        [],
-        invalid |> list.flat_map(fn(x) { x.issues }),
-      )
+      outcome.pure_with_issues([], invalid |> list.flat_map(fn(x) { x.issues }))
   }
 }
 

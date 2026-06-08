@@ -1,7 +1,7 @@
 /// Used to recreate and layout the original message source - formatted
 ///
 import gleam/list
-import gleam/option.{type Option as GleamOption} as gleam_option
+import gleam/option as gleam_option
 import gleam/string
 
 import ast.{
@@ -10,20 +10,13 @@ import ast.{
   type InputDeclaration, type Key, type Literal, type LiteralExpression,
   type LocalDeclaration, type Markup, type MatchStatement, type Matcher,
   type Message, type MessageElement, type Option, type OptionElement,
-  type OptionalWhitespace, type Pattern, type Placeholder, type QuotedPattern,
-  type Selector, type SimpleMessage, type SimpleStart, type UnquotedLiteral,
-  type Variable, type VariableExpression, type Variant,
+  type Pattern, type Placeholder, type QuotedPattern, type Selector,
+  type SimpleMessage, type UnquotedLiteral, type Variable,
+  type VariableExpression, type Variant,
 }
 
 fn list_to_string(list: List(a), f: fn(a) -> String) -> String {
   "[" <> list.map(list, f) |> string.join(", ") <> "]"
-}
-
-fn gleam_option_to_string(opt: GleamOption(a), f: fn(a) -> String) -> String {
-  case opt {
-    gleam_option.Some(value) -> "Some(" <> f(value) <> ")"
-    gleam_option.None -> "None"
-  }
 }
 
 pub fn prettify(message: Message) -> String {
@@ -36,24 +29,8 @@ pub fn prettify(message: Message) -> String {
 }
 
 fn simple_message_to_string(simple: SimpleMessage) -> String {
-  let ast.SimpleMessage(ws, opt) = simple
-  "SimpleMessageBody("
-  <> optional_whitespace_to_string(ws)
-  <> ", "
-  <> gleam_option_to_string(opt, fn(t) {
-    let #(start, pattern) = t
-    simple_start_to_string(start) <> ", " <> pattern_to_string(pattern)
-  })
-  <> ")"
-}
-
-fn simple_start_to_string(start: SimpleStart) -> String {
-  case start {
-    ast.Text(c) -> "SimpleStartChar(" <> c <> ")"
-    ast.Escaped(e) -> "SimpleStartEscapedChar(" <> e <> ")"
-    ast.Placeholder(p) ->
-      "SimpleStartPlaceholder(" <> placeholder_to_string(p) <> ")"
-  }
+  let ast.SimpleMessage(ws, pattern) = simple
+  "SimpleMessageBody(" <> ws <> pattern_to_string(pattern) <> ")"
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -297,8 +274,4 @@ fn identifier_to_string(id: Identifier) -> String {
     gleam_option.Some(ns) -> ns <> ":" <> name
     gleam_option.None -> name
   }
-}
-
-fn optional_whitespace_to_string(_ws: OptionalWhitespace) -> String {
-  " "
 }

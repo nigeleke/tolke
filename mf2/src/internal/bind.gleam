@@ -34,16 +34,12 @@ fn bind_simple_message(
   message: SimpleMessage,
   _context: Context,
 ) -> Outcome(BoundMessage) {
-  let ast.SimpleMessage(ws, simple_start_and_pattern) = message
+  let ast.SimpleMessage(ws, pattern_elements) = message
 
   let ws = ast.Text(ws)
 
-  let #(simple_start, pattern_elements) =
-    simple_start_and_pattern
-    |> gleam_option.unwrap(#(ast.Text(""), list.new()))
-
   let elements =
-    [ws, simple_start, ..pattern_elements]
+    [ws, ..pattern_elements]
     |> list.map(bind_element)
     |> outcome.transpose_list
     |> outcome.map(coalesce_adjacent_texts)

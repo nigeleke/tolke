@@ -1,5 +1,23 @@
 import gleam/option.{type Option as GleamOption}
 
+// ----------------------------------------------------------------------------
+// Custom for tolke
+// resource          = o resource-entry *(0 resource-entry)
+pub type Resource {
+  Resource(List(ResourceEntry))
+}
+
+// resource-entry    = resource-name o ":=" o message
+pub type ResourceEntry {
+  ResourceEntry(ResourceName, Message)
+}
+
+// resource-name     = name
+pub type ResourceName =
+  Name
+
+// ----------------------------------------------------------------------------
+// Message Format 2
 pub type ParsedMessage =
   Message
 
@@ -11,7 +29,7 @@ pub type Message {
 
 /// simple-message    = o [simple-start pattern]
 pub type SimpleMessage {
-  SimpleMessage(OptionalWhitespace, GleamOption(#(SimpleStart, Pattern)))
+  SimpleMessage(Whitespace, List(MessageElement))
 }
 
 /// internal representation...

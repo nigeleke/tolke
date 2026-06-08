@@ -20,10 +20,11 @@ pub type RunnerError(success, error, issues, parts) {
 }
 
 pub fn run_tests(
-  filename: String,
-  given: fn(Test) -> precondition,
-  when: fn(precondition, Test) -> actual,
-  then: fn(actual, Test) -> Result(Nil, RunnerError(_, _, _, _)),
+  from filename: String,
+  ignoring ignored_tests: List(String),
+  given given: fn(Test) -> precondition,
+  when when: fn(precondition, Test) -> actual,
+  then then: fn(actual, Test) -> Result(Nil, RunnerError(_, _, _, _)),
 ) {
   let assert Ok(content) = simplifile.read(filename)
   let assert Ok(raw_test_file) =
@@ -36,6 +37,10 @@ pub fn run_tests(
 
   let result =
     tests
+    |> list.filter(fn(test_) {
+      let ignore = ignored_tests |> list.contains(test_.description)
+      !ignore
+    })
     |> list.try_each(run_test(given, when, then, _))
 
   let assert Ok(_) = result

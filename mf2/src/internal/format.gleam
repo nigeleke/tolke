@@ -41,6 +41,7 @@ fn parts_to_string(
       model.Text(s) -> Ok(s)
       model.MarkupOpen(_, _) -> Error(Nil)
       model.MarkupClose(_) -> Error(Nil)
+      model.MarkupStandalone(_, _) -> Error(Nil)
     }
   })
   |> string.join("")
@@ -50,13 +51,13 @@ fn format_elements(
   elements: List(EvaluatedElement),
 ) -> List(FormattedMessagePart) {
   elements
-  |> list.flat_map(format_element)
+  |> list.map(format_element)
 }
 
-fn format_element(element: EvaluatedElement) -> List(FormattedMessagePart) {
+fn format_element(element: EvaluatedElement) -> FormattedMessagePart {
   case element {
-    em.Text(text) -> [model.Text(text)]
-    em.Value(value) -> [format_value(value)]
+    em.Text(text) -> model.Text(text)
+    em.Value(value) -> format_value(value)
     em.Markup(markup) -> format_markup(markup)
   }
 }
@@ -87,22 +88,15 @@ fn format_unresolved(value: UnresolvedValue) -> FormattedMessagePart {
   |> model.Text
 }
 
-fn format_markup(markup: EvaluatedMarkup) -> List(FormattedMessagePart) {
+fn format_markup(markup: EvaluatedMarkup) -> FormattedMessagePart {
   case markup {
-    em.Standalone(name, attrs) -> [
-      [model.MarkupOpen(name, format_attributes(attrs))],
-      [model.MarkupClose(name)],
-    ]
+    em.Standalone(name, attrs) ->
+      model.MarkupStandalone(name, format_attributes(attrs))
 
-    em.Open(name, attrs) -> [
-      [model.MarkupOpen(name, format_attributes(attrs))],
-    ]
+    em.Open(name, attrs) -> model.MarkupOpen(name, format_attributes(attrs))
 
-    em.Close(name) -> [
-      [model.MarkupClose(name)],
-    ]
+    em.Close(name) -> model.MarkupClose(name)
   }
-  |> list.flatten
 }
 
 fn format_attributes(

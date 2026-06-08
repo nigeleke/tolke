@@ -5,24 +5,6 @@
 [![Package Version](https://img.shields.io/hexpm/v/tolke)](https://hex.pm/packages/tolke)
 [![Hex Docs](https://img.shields.io/badge/hex-docs-ffaff3)](https://hexdocs.pm/tolke/)
 
-## Status
-
-This tag (message-format-2) represents a snapshot of the tolke development that would have used messsage format 2 as the underlying
-internationalization format.
-
-It contains a complete working parser for mf2 messages (`mf2_parser`) and a semi-complete "format" and "format_to_parts" implementation (`mf2`).
-
-To complete it, it will be necessary to provide wrappings around Localize (erlang) and Intl (javascript) packages; minimally for 
-localised number formatting and probably date formatting too.
-
-My driver for development of tolke only required simple (textual) translation where the original apps were in Rust, using fluent files.
-
-The decision as been made to continue tolke for fluent files; however this development /could be/ picked up again, so it has been clearly tagged.
-
-
-__Under development__
-
-During development the [g18n](https://g18n.hexdocs.pm/) and [localize](https://localize.hexdocs.pm/readme.html) packages were discovered - which potentially make the work here redundant. Watch this space.
 
 ## Background
 
@@ -33,10 +15,10 @@ It then generates Gleam code from these message files as a pre-build projection 
 So the entry
 
 ```mf2
-hello-world = Hello {$name}
+hello-world := Hello {$name}
 ```
 
-will create
+will create a locale bundled equivalent (see usage) for:
 
 ```gleam
 pub fn hello_world(name: String) -> String {...}

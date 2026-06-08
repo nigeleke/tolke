@@ -11,9 +11,11 @@
 /// local = %x2E.6C.6F.63.61.6C  ; ".local"
 /// match = %x2E.6D.61.74.63.68  ; ".match"
 ///
+import gleam/dict.{type Dict}
 import gleam/list
 import gleam/option.{type Option as GleamOption} as gleam_option
 import gleam/order
+import gleam/result
 import gleam/string
 
 import ast.{
@@ -22,10 +24,11 @@ import ast.{
   type FunctionExpression, type Identifier, type Input, type InputDeclaration,
   type Key, type Literal, type LiteralExpression, type Local,
   type LocalDeclaration, type Markup, type Match, type MatchStatement,
-  type Matcher, type Message, type Name, type NameChar, type NameStart,
-  type Namespace, type Option, type OptionalWhitespace, type Pattern,
-  type Placeholder, type QuotedChar, type QuotedLiteral, type QuotedPattern,
-  type RequiredWhitespace, type Selector, type SimpleMessage, type SimpleStart,
+  type Matcher, type Message, type MessageElement, type Name, type NameChar,
+  type NameStart, type Namespace, type Option, type OptionalWhitespace,
+  type Pattern, type Placeholder, type QuotedChar, type QuotedLiteral,
+  type QuotedPattern, type RequiredWhitespace, type Resource, type ResourceEntry,
+  type ResourceName, type Selector, type SimpleMessage, type SimpleStart,
   type SimpleStartChar, type TextChar, type UnquotedLiteral, type Variable,
   type VariableExpression, type Variant, type Whitespace,
 }
@@ -39,7 +42,7 @@ type Parsed(a) {
 }
 
 pub type ParseError {
-  UnconsumedInputError(String)
+  UnconsumedInput(String)
   NoMatch
 }
 
@@ -49,13 +52,97 @@ pub type ParseError {
 pub type Parser(out) =
   fn(String) -> Result(Parsed(out), ParseError)
 
+// ----------------------------------------------------------------------------
+// Custom for tolke
+pub fn parse_resource_as_dict(
+  in: String,
+) -> Result(Dict(ResourceName, Message), ParseError) {
+  parse_resource(in)
+  |> result.map(resource_to_dict)
+}
+
+fn resource_to_dict(resource: Resource) -> Dict(ResourceName, Message) {
+  let ast.Resource(entries) = resource
+
+  entries
+  |> list.map(fn(entry) {
+    let ast.ResourceEntry(name, message) = entry
+    #(name, message)
+  })
+  |> dict.from_list
+}
+
+pub fn parse_resource(in: String) -> Result(Resource, ParseError) {
+  case resource()(in) {
+    Ok(parsed) ->
+      case string.is_empty(parsed.rest) {
+        True -> Ok(parsed.value)
+        False -> Error(UnconsumedInput(parsed.rest))
+      }
+    Error(error) -> Error(error)
+  }
+}
+
+// resource          = o resource-entry *(o resource-entry)
+fn resource() -> Parser(Resource) {
+  pair(
+    right(optional_whitespace(), resource_entry()),
+    zero_or_more(right(optional_whitespace(), resource_entry())),
+  )
+  |> map(fn(result) {
+    let #(head, tail) = result
+    ast.Resource([head, ..tail])
+  })
+  |> trace("resource")
+}
+
+// resource-entry    = resource-start message
+fn resource_entry() -> Parser(ResourceEntry) {
+  pair(resource_start(), resource_message())
+  |> map(fn(result) { ast.ResourceEntry(result.0, result.1) })
+  |> trace("resource-entry")
+}
+
+fn resource_message() -> Parser(Message) {
+  take_until(next_resource_entry())
+  |> and_then(fn(src) {
+    fn(rest) {
+      case parse(src) {
+        Ok(message) -> Ok(Parsed(message, rest))
+        Error(error) -> Error(error)
+      }
+    }
+  })
+}
+
+// [lookahead] resource-entry    = resource-start message
+fn next_resource_entry() -> Parser(Nil) {
+  lookahead(resource_start())
+  |> map(fn(_) { Nil })
+}
+
+// resource-start    = resource-name o ":="
+fn resource_start() -> Parser(ResourceName) {
+  triple(resource_name(), optional_whitespace(), exact(":="))
+  |> map(fn(result) { result.0 })
+}
+
+// resource-name     = name
+fn resource_name() -> Parser(ResourceName) {
+  name()
+  |> trace("resource-name")
+}
+
+// ----------------------------------------------------------------------------
+// Message Format 2
+//
 /// Parse into a single mf2 message body.
 pub fn parse(in: String) -> Result(Message, ParseError) {
   case message()(in) {
     Ok(parsed) ->
       case string.is_empty(parsed.rest) {
         True -> Ok(parsed.value)
-        False -> Error(NoMatch)
+        False -> Error(UnconsumedInput(parsed.rest))
       }
     Error(error) -> Error(error)
   }
@@ -64,17 +151,27 @@ pub fn parse(in: String) -> Result(Message, ParseError) {
 /// message           = simple-message / complex-message
 fn message() -> Parser(Message) {
   choice([
-    simple_message() |> complete() |> map(ast.Simple),
-    complex_message() |> complete() |> map(ast.Complex),
+    simple_message() |> map(ast.Simple),
+    complex_message() |> map(ast.Complex),
   ])
   |> trace("message")
 }
 
 /// simple-message = o [simple-start pattern]
 fn simple_message() -> Parser(SimpleMessage) {
-  pair(optional_whitespace(), optional(pair(simple_start(), pattern())))
+  pair(optional_whitespace(), simple_message_body())
   |> map(fn(result) { ast.SimpleMessage(result.0, result.1) })
   |> trace("simple-message")
+}
+
+fn simple_message_body() -> Parser(List(MessageElement)) {
+  choice([
+    pair(simple_start(), pattern())
+      |> map(fn(result) { [result.0, ..result.1] }),
+
+    empty()
+      |> map(fn(_) { [] }),
+  ])
 }
 
 /// simple-start      = simple-start-char / escaped-char / placeholder
@@ -874,16 +971,41 @@ fn succeed(value: a) -> Parser(a) {
   fn(in: String) { Ok(Parsed(value, in)) }
 }
 
-fn complete(parser: Parser(a)) -> Parser(a) {
+fn empty() -> Parser(Nil) {
+  fn(in: String) {
+    case string.is_empty(in) {
+      True -> Ok(Parsed(Nil, in))
+      False -> Error(NoMatch)
+    }
+  }
+}
+
+fn lookahead(parser: Parser(a)) -> Parser(a) {
   fn(input: String) {
     case parser(input) {
-      Ok(Parsed(value, rest)) ->
-        case string.is_empty(rest) {
-          True -> Ok(Parsed(value, ""))
-          False -> Error(UnconsumedInputError(rest))
-        }
-      Error(e) -> Error(e)
+      Ok(parsed) -> Ok(Parsed(parsed.value, input))
+      Error(error) -> Error(error)
     }
+  }
+}
+
+fn take_until(stop: Parser(a)) -> Parser(String) {
+  fn(input: String) { take_until_loop(stop, input, []) }
+}
+
+fn take_until_loop(
+  stop: Parser(a),
+  input: String,
+  acc: List(String),
+) -> Result(Parsed(String), ParseError) {
+  case stop(input) {
+    Ok(_) -> Ok(Parsed(joined(list.reverse(acc)), input))
+
+    Error(_) ->
+      case string.pop_grapheme(input) {
+        Ok(#(grapheme, rest)) -> take_until_loop(stop, rest, [grapheme, ..acc])
+        Error(_) -> Ok(Parsed(joined(list.reverse(acc)), ""))
+      }
   }
 }
 
@@ -913,6 +1035,7 @@ fn do_trace(parser: Parser(a), name: String) -> Parser(a) {
 
       Error(error) -> {
         io.println("<! " <> name)
+        io.println(" ... '" <> input <> "'")
         Error(error)
       }
     }
