@@ -5,28 +5,79 @@
 [![Package Version](https://img.shields.io/hexpm/v/tolke)](https://hex.pm/packages/tolke)
 [![Hex Docs](https://img.shields.io/badge/hex-docs-ffaff3)](https://hexdocs.pm/tolke/)
 
-
 ## Background
 
-This program reads internationalisation files written in ICU MessageFormat 2.0 and processes them as structured input. It parses the message definitions and checks them for consistency and correctness, including issues such as missing variables, mismatched parameters, and invalid or inconsistent formatting patterns.
+This `tolke` respository is a set of [Gleam](https://gleam.run) packages to enable internationalisation in client programs.
 
-It then generates Gleam code from these message files as a pre-build projection of the MF2 messages, so that they can be used directly in the application code. This removes the need for runtime string lookups or manual formatting and makes message usage explicit and statically checked where possible. The overall purpose is to move internationalisation handling into the build process and provide a more reliable interface between translation data and application code.
+The primary program is designed to run as part of a build pipeline, which will read and check locale resource files, then generate source code for formatting the messages in one of the locales.
 
-So the entry
+## Usage
+
+### data files - folder structure
+
+`tolke` will look at all files under configured folders, determining the locale of the content from the file path, e.g.:
+
+```bash
+i18n/
+  en-GB.mf2
+  it-IT.mf2
+```
+
+```bash
+i18n/
+  en/
+    en-GB/
+      foo_component.mf2
+      app_errors.mf2
+      etc
+    en-US/
+      etc
+  fr/
+    fr-FR/
+      etc
+    fr-CA/
+      etc
+  etc
+```
+
+### data files - content
+
+A list of key / message format 2 messages.
 
 ```mf2
-hello-world := Hello {$name}
+app-title = My App
+hello := Hello {$name} !!
 ```
 
-will create a locale bundled equivalent (see usage) for:
+### generate code
+
+```bash
+gleam add --dev tolke_dev_tools
+gleam run -m tolke/dev
+```
+
+### gleam.toml
+
+```toml
+[tools.tolke]
+mf2_sources = ["./i18n/"]
+canonical = "en-GB"
+primaries = []
+target = "./src/generated/tolke"
+```
+
+### use translations
 
 ```gleam
-pub fn hello_world(name: String) -> String {...}
+import tolke as t
+
+pub fn main() {
+  let i18n = t.bundle()
+
+  assert i18n |> t.app_title() == "My App"
+  assert i18n |> t.hello("World") == "Hello World !!"
+}
 ```
-
-The name `tolke` is Danish / Norwegian for "interpret".
-
-Further documentation can be found at <https://hexdocs.pm/tolke>.
 
 ## Development
 
@@ -49,3 +100,13 @@ cd core
 gleam test
 gleam build
 ```
+
+### packages
+
+| Package          | Description |
+|------------------|-------------|
+| `build_pipeline` | Part of `tolke`'s internal build pipeline |
+| `dev_test`       | Part of `tolke`'s internal testing framework |
+| `mf2_parser`     | A parser for [MessageFormat 2](https://messageformat.unicode.org/) messages |
+| `mf2`            | A formatter for [MessageFormat 2](https://messageformat.unicode.org/) messages |
+| `core`           | The main `tolke` application |

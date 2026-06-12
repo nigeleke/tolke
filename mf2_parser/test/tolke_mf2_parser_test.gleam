@@ -13,7 +13,7 @@ pub fn main() -> Nil {
 
 pub fn parser_parses_valid_messages_test() {
   runner.run_tests(
-    from: "../dev_test/fixtures/tests/syntax.json",
+    from: "../dev_test/test/fixtures/tests/syntax.json",
     ignoring: [],
     given: fn(_) { Nil },
     when: fn(_, test_) { parser.parse(test_.src) },
@@ -28,7 +28,7 @@ pub fn parser_parses_valid_messages_test() {
 
 pub fn parser_rejects_invalid_messages_test() {
   runner.run_tests(
-    from: "../dev_test/fixtures/tests/syntax-errors.json",
+    from: "../dev_test/test/fixtures/tests/syntax-errors.json",
     ignoring: [],
     given: fn(_) { Nil },
     when: fn(_, test_) { parser.parse(test_.src) },

@@ -7,10 +7,11 @@ pub fn main() -> Nil {
 }
 
 pub fn syntax_test() {
-  let assert Ok(_) = runner.run_tests("../dev_test/fixtures/tests/syntax.json")
+  let assert Ok(_) =
+    runner.run_tests("../dev_test/test/fixtures/tests/syntax.json")
 }
 
 pub fn syntax_errors_test_ignore() {
   let assert Ok(_) =
-    runner.run_tests("../dev_test/fixtures/tests/syntax-errors.json")
+    runner.run_tests("../dev_test/test/fixtures/tests/syntax-errors.json")
 }
