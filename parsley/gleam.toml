@@ -1,10 +1,9 @@
-name = "mf2_parser"
+name = "parsley"
 version = "0.0.0"
 
 [dependencies]
 gleam_stdlib = ">= 1.0.0 and < 2.0.0"
-parsley = { path = "../parsley" }
 
 [dev_dependencies]
 gleeunit = ">= 1.0.0 and < 2.0.0"
-dev_test = { path = "../dev_test" }
+

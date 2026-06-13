@@ -42,7 +42,6 @@ pub fn raw_test_file_decoder() -> Decoder(RawTestFile) {
     default_test_properties:,
     tests:,
   ))
-  |> trace("raw-test-file")
 }
 
 fn default_test_properties_decoder() -> Decoder(DefaultTestProperties) {
@@ -104,7 +103,6 @@ fn default_test_properties_decoder() -> Decoder(DefaultTestProperties) {
     exp_parts:,
     exp_errors:,
   ))
-  |> trace("default-test-properties-decoder")
 }
 
 fn bidi_isolation_decoder() -> Decoder(BidiIsolation) {
@@ -115,7 +113,6 @@ fn bidi_isolation_decoder() -> Decoder(BidiIsolation) {
       _ -> decode.failure(ast.BidiIsolationDefault, "invalid bidiIsolation")
     }
   })
-  |> trace("bidi-isolation-decoder")
 }
 
 fn tag_decoder() -> decode.Decoder(Tag) {
@@ -128,7 +125,6 @@ fn tag_decoder() -> decode.Decoder(Tag) {
       _ -> decode.failure(ast.CurrencyTag, "invalid tag")
     }
   })
-  |> trace("tag-decoder")
 }
 
 fn var_decoder() -> decode.Decoder(Var) {
@@ -150,7 +146,6 @@ fn var_decoder() -> decode.Decoder(Var) {
   }
 
   decode.one_of(datetime_decoder, [generic_decoder])
-  |> trace("var-decoder")
 }
 
 fn exp_part_decoder() -> decode.Decoder(ExpPart) {
@@ -178,7 +173,6 @@ fn exp_part_decoder() -> decode.Decoder(ExpPart) {
       decode.optional(decode.dynamic),
     )
     decode.success(ast.MarkupPart(kind:, name:, id:, options:))
-    |> trace("markup-part-decoder")
   }
 
   let expression_part_decoder = fn(type_: String) {
@@ -218,13 +212,11 @@ fn exp_part_decoder() -> decode.Decoder(ExpPart) {
       parts: parts,
       value: value,
     ))
-    |> trace("expression-part-decoder")
   }
 
   let fallback_part_decoder = {
     use source <- decode.field("source", decode.string)
     decode.success(ast.FallbackPart(source))
-    |> trace("fallback-part-decoder")
   }
 
   let exp_part_registry = {
@@ -246,7 +238,6 @@ fn exp_part_decoder() -> decode.Decoder(ExpPart) {
       Error(_) -> decode.failure(ast.TextPart(""), "unknown expPart: " <> type_)
     }
   })
-  |> trace("exp-part-decoder")
 }
 
 fn bidi_isolation_value_decoder() -> Decoder(BidiIsolationValue) {
@@ -297,7 +288,6 @@ fn exp_error_decoder() -> Decoder(ExpError) {
     "bad-variant-key" -> decode.success(ast.BadVariantKey)
     _ -> decode.failure(ast.SyntaxError, "unknown exp-error")
   }
-  |> trace("exp_error_decoder")
 }
 
 fn raw_test_decoder() -> Decoder(RawTest) {
@@ -370,29 +360,3 @@ fn raw_test_decoder() -> Decoder(RawTest) {
     only:,
   ))
 }
-
-// ------------------------------------
-import gleam/io
-
-const trace_enabled = False
-
-fn trace(decoder: decode.Decoder(a), name: String) -> decode.Decoder(a) {
-  case trace_enabled {
-    True -> decoder |> do_trace(name)
-    False -> decoder
-  }
-}
-
-fn do_trace(decoder: decode.Decoder(a), name: String) -> decode.Decoder(a) {
-  io.println(">> " <> name)
-  decoder
-  |> decode.map(fn(value) {
-    io.println("<< " <> name)
-    value
-  })
-  |> decode.map_errors(fn(errors) {
-    io.println("<! " <> name)
-    errors
-  })
-}
-// ------------------------------------

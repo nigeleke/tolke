@@ -12,6 +12,8 @@ gleam build
 gleam run
 cd ../dev_test
 gleam build
+cd ../parsley
+gleam build
 cd ../mf2_parser
 gleam build
 cd ../mf2
@@ -30,6 +32,8 @@ gleam test
 gleam run
 cd ../dev_test
 gleam test
+cd ../parsley
+gleam test
 cd ../mf2_parser
 gleam test
 cd ../mf2
@@ -46,6 +50,8 @@ echo "[run] Execute build_pipeline and rebuild dependent projects"
 cd build_pipeline
 gleam run
 cd ../dev_test
+gleam build
+cd ../parsley
 gleam build
 cd ../mf2_parser
 gleam build
@@ -68,6 +74,8 @@ cd build_pipeline
 gleam clean
 cd ../dev_test
 gleam clean
+cd ../parsley
+gleam clean
 cd ../mf2_parser
 gleam clean
 cd ../mf2
@@ -85,6 +93,8 @@ cd build_pipeline
 gleam update
 cd ../dev_test
 gleam update
+cd ../parsley
+gleam update
 cd ../mf2_parser
 gleam update
 cd ../mf2
@@ -101,6 +111,8 @@ echo "[update] Format Gleam source across all workspace projects"
 cd build_pipeline
 gleam format
 cd ../dev_test
+gleam format
+cd ../parsley
 gleam format
 cd ../mf2_parser
 gleam format

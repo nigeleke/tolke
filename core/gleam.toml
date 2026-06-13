@@ -14,10 +14,11 @@ repository = { type = "github", user = "nigeleke", repo = "tolke" }
 internal_modules = ["tolke/internal"]
 
 [dependencies]
-gleam_stdlib = ">= 1.0.0 and < 2.0.0"
-tom = ">= 2.1.0 and < 3.0.0"
 filepath = ">= 1.1.2 and < 2.0.0"
+gleam_stdlib = ">= 1.0.0 and < 2.0.0"
+parsley = { path = "../parsley" }
 simplifile = ">= 2.4.0 and < 3.0.0"
+tom = ">= 2.1.0 and < 3.0.0"
 
 [dev_dependencies]
 gleeunit = ">= 1.0.0 and < 2.0.0"

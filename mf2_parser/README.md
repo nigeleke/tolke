@@ -1,7 +1,4 @@
-# tolke_mf2_parser
-
-[![Package Version](https://img.shields.io/hexpm/v/tolke_mf2_parser)](https://hex.pm/packages/tolke_mf2_parser)
-[![Hex Docs](https://img.shields.io/badge/hex-docs-ffaff3)](https://hexdocs.pm/tolke_mf2_parser/)
+# mf2_parser
 
 ## Summary
 
