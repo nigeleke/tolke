@@ -96,7 +96,7 @@ gleam run --module __TODO__
 ```
 
 ```bash
-cd core
+cd dev_tools
 gleam test
 gleam build
 ```
@@ -107,6 +107,6 @@ gleam build
 |------------------|-------------|
 | `build_pipeline` | Part of `tolke`'s internal build pipeline |
 | `dev_test`       | Part of `tolke`'s internal testing framework |
+| `dev_tools`      | The `tolke development tooling` for clients of `tolke` |
 | `mf2_parser`     | A parser for [MessageFormat 2](https://messageformat.unicode.org/) messages |
 | `mf2`            | A formatter for [MessageFormat 2](https://messageformat.unicode.org/) messages |
-| `core`           | The main `tolke` application |

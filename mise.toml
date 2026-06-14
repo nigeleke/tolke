@@ -18,7 +18,7 @@ cd ../mf2_parser
 gleam build
 cd ../mf2
 gleam build
-cd ../core
+cd ../dev_tools
 gleam build
 cd ..
 """
@@ -38,7 +38,7 @@ cd ../mf2_parser
 gleam test
 cd ../mf2
 gleam test
-cd ../core
+cd ../dev_tools
 gleam test
 cd ..
 """
@@ -57,7 +57,7 @@ cd ../mf2_parser
 gleam build
 cd ../mf2
 gleam build
-cd ../core
+cd ../dev_tools
 gleam run
 cd ..
 """
@@ -80,7 +80,7 @@ cd ../mf2_parser
 gleam clean
 cd ../mf2
 gleam clean
-cd ../core
+cd ../dev_tools
 gleam clean
 cd ..
 """
@@ -99,7 +99,7 @@ cd ../mf2_parser
 gleam update
 cd ../mf2
 gleam update
-cd ../core
+cd ../dev_tools
 gleam update
 cd ..
 """
@@ -118,7 +118,7 @@ cd ../mf2_parser
 gleam format
 cd ../mf2
 gleam format
-cd ../core
+cd ../dev_tools
 gleam format
 cd ..
 """

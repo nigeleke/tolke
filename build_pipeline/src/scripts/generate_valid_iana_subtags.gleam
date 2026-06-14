@@ -7,7 +7,7 @@ import gleam/string
 import gleam/uri
 import simplifile
 
-const target_folder = "../core/src/internal/generated/"
+const target_folder = "../dev_tools/src/internal/generated/"
 
 const target_source = target_folder <> "iana_definitions.gleam"
 

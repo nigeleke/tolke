@@ -25,14 +25,14 @@ fn generate_version_file_content(toml_string: String) -> #(String, String) {
   #(source, version)
 }
 
-const core = "../core/"
+const dev_tools = "../dev_tools/"
 
-const target_folder = core <> "src/internal/generated/"
+const target_folder = dev_tools <> "src/internal/generated/"
 
 pub fn generate_version() -> String {
   let assert Ok(_) = simplifile.create_directory_all(target_folder)
 
-  let gleam_toml = core <> "gleam.toml"
+  let gleam_toml = dev_tools <> "gleam.toml"
   let assert Ok(toml) = simplifile.read(from: gleam_toml)
 
   let #(contents, version) = generate_version_file_content(toml)

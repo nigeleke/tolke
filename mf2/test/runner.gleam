@@ -33,9 +33,13 @@ pub fn run_tests(filename: String) {
     given: fn(test_) { create_context(test_) },
     when: fn(context, test_) {
       let result = mf2.parse(test_.src)
-      let assert Ok(message) = result.value
-      message
-      |> mf2.format_to_string_and_parts(context)
+      result
+      |> outcome.flat_map(fn(result) {
+        case result {
+          Ok(message) -> message |> mf2.format_to_string_and_parts(context)
+          Error(_) -> mf2.empty()
+        }
+      })
     },
     then: fn(actual, test_) {
       test_.assertions

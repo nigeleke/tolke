@@ -45,6 +45,10 @@ pub fn format_to_string_and_parts(
   |> outcome.map(format.format(_, format_context))
 }
 
+pub fn empty() -> Outcome(Message) {
+  outcome.pure(fm.FormattedMessage("", []))
+}
+
 pub fn format(message: ParsedMessage, context: Context) -> Outcome(String) {
   format_to_string_and_parts(message, context)
   |> outcome.map(fn(message) {

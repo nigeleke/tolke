@@ -1,4 +1,4 @@
-name = "tolke_mf2"
+name = "mf2"
 version = "0.0.0"
 description = "Gleam MessageFormat 2 implementation"
 
