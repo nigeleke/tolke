@@ -1,5 +1,9 @@
-import gleam/io
+import gleam/result
+import tolke/error.{type Error}
 
-pub fn main() -> Nil {
-  io.println("Hello from core!")
+import internal/pipeline
+
+pub fn main() -> Result(Nil, Error) {
+  use _ <- result.try(pipeline.run_from_config_file("./gleam.toml"))
+  Ok(Nil)
 }

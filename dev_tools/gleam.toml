@@ -2,7 +2,7 @@ name = "tolke_dev_tools"
 version = "0.0.0"
 
 description = """
-tolke turns MessageFormat 2 files into type-safe Gleam code.
+tolke_dev_tools turns MessageFormat 2 files into type-safe Gleam code.
 It compiles messages into convenient functions, validates consistency across
 locales, and supports both runtime and compile-time locale bundles.
 """
@@ -11,7 +11,7 @@ licences = ["BSD-3-Clause"]
 repository = { type = "github", user = "nigeleke", repo = "tolke" }
 # links = [{ title = "Website", href = "" }]
 
-internal_modules = ["tolke/internal"]
+internal_modules = ["dev_tools/internal"]
 
 [dependencies]
 filepath = ">= 1.1.2 and < 2.0.0"

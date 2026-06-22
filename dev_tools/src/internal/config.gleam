@@ -1,6 +1,7 @@
 import gleam/dict.{type Dict}
 import gleam/list
 import gleam/result
+import simplifile
 import tom.{type Toml}
 
 import tolke/error.{type Error}
@@ -13,6 +14,14 @@ pub opaque type Config {
     primaries: List(Locale),
     target: String,
   )
+}
+
+pub fn from_toml_file(path: String) -> Result(Config, Error) {
+  path
+  |> simplifile.read()
+  |> result.map_error(fn(_) { error.InvalidPath(path) })
+  |> result.map(from_toml_string)
+  |> result.flatten
 }
 
 pub fn from_toml_string(value: String) -> Result(Config, Error) {

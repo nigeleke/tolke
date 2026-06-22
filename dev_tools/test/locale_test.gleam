@@ -1,7 +1,7 @@
 import gleam/list
 import gleeunit/should
 
-import tolke/locale
+import internal/locale
 
 pub fn valid_locales_test() {
   let locales = [
